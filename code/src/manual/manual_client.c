@@ -26,44 +26,6 @@ static int parse_device_id(const char *s, device_id_t *out_id) {
     return DOMO_OK;
 }
 
-static int build_manual_request(device_id_t id,
-                                const char *command,
-                                const char *param1,
-                                const char *param2,
-                                domo_message_t *msg) {
-    if (msg == NULL || command == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
-    }
-
-    memset(msg, 0, sizeof(*msg));
-    msg->kind = DOMO_MSG_REQUEST;
-    msg->src_id = DOMO_CONTROLLER_ID;
-    msg->dst_id = id;
-    msg->src_pid = getpid();
-    msg->request_id = (int)getpid();
-
-    if (strcmp(command, "info") == 0) {
-        msg->cmd = DOMO_CMD_INFO;
-    } else if (strcmp(command, "switch") == 0) {
-        msg->cmd = DOMO_CMD_SWITCH;
-        snprintf(msg->arg1, sizeof(msg->arg1), "%s", param1 ? param1 : "");
-        snprintf(msg->arg2, sizeof(msg->arg2), "%s", param2 ? param2 : "");
-    } else if (strcmp(command, "set") == 0) {
-        msg->cmd = DOMO_CMD_SET_PARAM;
-        snprintf(msg->arg1, sizeof(msg->arg1), "%s", param1 ? param1 : "");
-        snprintf(msg->arg2, sizeof(msg->arg2), "%s", param2 ? param2 : "");
-    } else {
-        return DOMO_ERR_INVALID_COMMAND;
-    }
-
-    return DOMO_OK;
-}
-
-/*
- * Expected registry format example:
- * <id> <pid> <fifo_path>
- * 3 12345 runtime/fifos/device_3.fifo
- */
 static int lookup_device_fifo(device_id_t id, char *fifo_path, size_t fifo_path_len) {
     FILE *fp;
     int file_id;
@@ -89,6 +51,52 @@ static int lookup_device_fifo(device_id_t id, char *fifo_path, size_t fifo_path_
 
     fclose(fp);
     return DOMO_ERR_DEVICE_NOT_FOUND;
+}
+
+static int build_manual_request(device_id_t id,
+                                const char *command,
+                                const char *param1,
+                                const char *param2,
+                                domo_message_t *msg) {
+    if (msg == NULL || command == NULL) {
+        return DOMO_ERR_INVALID_PARAMETERS;
+    }
+
+    memset(msg, 0, sizeof(*msg));
+    msg->kind = DOMO_MSG_REQUEST;
+    msg->src_id = DOMO_CONTROLLER_ID;
+    msg->dst_id = id;
+    msg->src_pid = getpid();
+    msg->request_id = (int)getpid();
+
+    if (strcmp(command, "info") == 0) {
+        msg->cmd = DOMO_CMD_INFO;
+        return DOMO_OK;
+    }
+
+    if (strcmp(command, "switch") == 0) {
+        if (param1 == NULL || param2 == NULL) {
+            return DOMO_ERR_INVALID_PARAMETERS;
+        }
+
+        msg->cmd = DOMO_CMD_SWITCH;
+        snprintf(msg->arg1, sizeof(msg->arg1), "%s", param1);
+        snprintf(msg->arg2, sizeof(msg->arg2), "%s", param2);
+        return DOMO_OK;
+    }
+
+    if (strcmp(command, "set") == 0) {
+        if (param1 == NULL || param2 == NULL) {
+            return DOMO_ERR_INVALID_PARAMETERS;
+        }
+
+        msg->cmd = DOMO_CMD_SET_PARAM;
+        snprintf(msg->arg1, sizeof(msg->arg1), "%s", param1);
+        snprintf(msg->arg2, sizeof(msg->arg2), "%s", param2);
+        return DOMO_OK;
+    }
+
+    return DOMO_ERR_INVALID_COMMAND;
 }
 
 int main(int argc, char **argv) {
@@ -128,7 +136,7 @@ int main(int argc, char **argv) {
 
     rc = domo_make_reply_fifo_path(getpid(), request.request_id, reply_fifo, sizeof(reply_fifo));
     if (rc != DOMO_OK) {
-        fprintf(stderr, "Cannot create reply fifo path.\n");
+        fprintf(stderr, "Cannot build reply fifo path: %s\n", domo_error_str(rc));
         return rc;
     }
 

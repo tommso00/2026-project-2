@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -std=c11 -Iinclude
+CFLAGS = -D_POSIX_C_SOURCE=200809L -Wall -Wextra -Werror -std=c11 -Iinclude
 LDFLAGS =
 
 BIN_DIR = bin

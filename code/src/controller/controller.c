@@ -1,3 +1,18 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include <errno.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include "controller.h"
+#include "error_codes.h"
+#include "ipc.h"
+
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -208,6 +223,10 @@ int controller_list_devices(controller_t *controller) {
 
 int controller_info_device(controller_t *controller, device_id_t id) {
     const controller_device_entry_t *dev;
+    domo_message_t req;
+    domo_message_t resp;
+    char reply_fifo[DOMO_PATH_MAX];
+    int rc;
 
     if (controller == NULL) {
         return DOMO_ERR_INVALID_PARAMETERS;
@@ -218,14 +237,29 @@ int controller_info_device(controller_t *controller, device_id_t id) {
         return DOMO_ERR_DEVICE_NOT_FOUND;
     }
 
-    printf("Device info\n");
-    printf("  id: %d\n", dev->id);
-    printf("  type: %s\n", device_type_str(dev->type));
-    printf("  pid: %d\n", (int)dev->pid);
-    printf("  parent: %d\n", dev->parent_id);
-    printf("  fifo: %s\n", dev->fifo_path);
-    printf("  alive: %s\n", dev->alive ? "yes" : "no");
+    memset(&req, 0, sizeof(req));
+    req.kind = DOMO_MSG_REQUEST;
+    req.cmd = DOMO_CMD_INFO;
+    req.src_id = DOMO_CONTROLLER_ID;
+    req.dst_id = id;
+    req.src_pid = getpid();
+    req.request_id = (int)getpid();
 
+    rc = domo_make_reply_fifo_path(getpid(), req.request_id, reply_fifo, sizeof(reply_fifo));
+    if (rc != DOMO_OK) {
+        return rc;
+    }
+
+    rc = domo_request_reply(dev->fifo_path, reply_fifo, &req, &resp);
+    if (rc != DOMO_OK) {
+        return rc;
+    }
+
+    if (resp.status != DOMO_OK) {
+        return resp.status;
+    }
+
+    printf("%s\n", resp.payload);
     return DOMO_OK;
 }
 

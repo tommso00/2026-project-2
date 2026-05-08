@@ -21,7 +21,6 @@ case "$EXIT_CODE" in
   2) echo "Invalid command." ;;
   3) echo "IPC communication failed." ;;
   4) echo "Invalid parameters." ;;
-  5) echo "Device rejected manual command." ;;
   *) echo "Manual interaction failed with code $EXIT_CODE." ;;
 esac
 

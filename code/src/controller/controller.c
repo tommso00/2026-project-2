@@ -13,19 +13,6 @@
 #include "error_codes.h"
 #include "ipc.h"
 
-#include <errno.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include "controller.h"
-#include "error_codes.h"
-#include "ipc.h"
-
 static int ensure_runtime_dirs(void) {
     if (mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
     if (mkdir(FIFO_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;

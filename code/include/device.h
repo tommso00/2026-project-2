@@ -26,9 +26,9 @@ typedef struct {
 
 typedef struct device device ;
 
-typedef int (*device_init_fn)(device *dev);
-typedef int (*device_handle_fn)(device *dev, const message *req, message *resp);
-typedef int (*device_destroy_fn)(device *dev);
+typedef int (*device_init)(device *dev);
+typedef int (*device_handle)(device *dev,const message *req, message *resp);
+typedef int (*device_destroy)(device *dev);
 
 struct device {
     device_info info;
@@ -38,9 +38,9 @@ struct device {
 
     char registry_snapshot[PAYLOAD_MAX];
 
-    device_init_fn init;
-    device_handle_fn handle_message;
-    device_destroy_fn destroy;
+    device_init init ;
+    device_handle handle_message;
+    device_destroy destroy;
 
     void *impl;
 };
@@ -50,7 +50,7 @@ bool device_is_control(device_type type);
 bool device_is_interaction(device_type type);
 
 int device_build_info_payload(const device *dev, char *buffer, size_t buffer_len);
-int device_apply_switch(device *dev, const char *label, const char *position);
-int device_set_parameter(device *dev, const char *key, const char *value);
+int device_apply_switch(device *dev,const char *label,const char *position);
+int device_set_parameter(device *dev, const char *key,const char *value);
 
 #endif

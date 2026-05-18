@@ -114,13 +114,13 @@ int main(int argc, char **argv) {
 
     rc = parse_device_id(argv[1], &id);
     if (rc != OK) {
-        fprintf(stderr, "Invalid device id.\n");
+        fprintf(stderr, "The devide id is not valid.\n");
         return rc;
     }
 
     rc = lookup_device_fifo(id, request_fifo, sizeof(request_fifo));
     if (rc != OK) {
-        fprintf(stderr, "Device lookup failed: %s\n", error_str(rc));
+        fprintf(stderr, "the device lookup failed: %s\n", error_str(rc));
         return rc;
     }
 

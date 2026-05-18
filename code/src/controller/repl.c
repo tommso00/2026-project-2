@@ -104,7 +104,7 @@ int controller_run(controller *controller) {
                 break;
 
             default:
-                fprintf(stderr, "Invalid command.\n");
+                fprintf(stderr, "Command not valid.\n");
                 rc = ERR_INVALID_COMMAND;
                 break;
         }

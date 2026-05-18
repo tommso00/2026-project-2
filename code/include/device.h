@@ -27,22 +27,32 @@ typedef struct {
 typedef struct device device ;
 
 typedef int (*device_init)(device *dev);
-typedef int (*device_handle)(device *dev,const message *req, message *resp);
+typedef int (*device_handle)(device *dev, const message *req, message *resp);
 typedef int (*device_destroy)(device *dev);
 
+struct device_impl;
+
+/*
+ * Generic device runtime state.
+ * Child links and serialized snapshots are stored dynamically
+ * instead of using fixed-size arrays.
+ */
 struct device {
     device_info info;
 
-    int child_count;
-    device_id child_ids[32];
+    size_t child_count;
+    size_t child_capacity;
+    device_id *child_ids;
 
-    char registry_snapshot[PAYLOAD_MAX];
+    /* Serialized device snapshot stored on demand. */
+    char *registry_snapshot;
+    size_t registry_snapshot_size;
 
-    device_init init ;
+    device_init init;
     device_handle handle_message;
     device_destroy destroy;
 
-    void *impl;
+    struct device_impl *impl;
 };
 
 const char *device_type_str(device_type type);
@@ -50,7 +60,7 @@ bool device_is_control(device_type type);
 bool device_is_interaction(device_type type);
 
 int device_build_info_payload(const device *dev, char *buffer, size_t buffer_len);
-int device_apply_switch(device *dev,const char *label,const char *position);
-int device_set_parameter(device *dev, const char *key,const char *value);
+int device_apply_switch(device *dev, const char *label, const char *position);
+int device_set_parameter(device *dev, const char *key, const char *value);
 
 #endif

@@ -17,7 +17,7 @@ typedef enum {
 
 typedef struct {
     parser_cmd_type_t type;
-    char argv[5][DOMO_VALUE_MAX];
+    char argv[5][VALUE_MAX];
     int argc;
 } parsed_command_t;
 

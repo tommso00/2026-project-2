@@ -18,16 +18,16 @@ typedef struct {
     device_type_t type;
     pid_t pid;
     device_id_t logical_parent_id;
-    domo_state_t state;
+    state_t state;
     bool manual_override;
-    char fifo_path[DOMO_PATH_MAX];
-    char name[DOMO_NAME_MAX];
+    char fifo_path[PATH_MAX];
+    char name[NAME_MAX];
 } device_info_t;
 
 typedef struct device device_t;
 
 typedef int (*device_init_fn)(device_t *dev);
-typedef int (*device_handle_fn)(device_t *dev, const domo_message_t *req, domo_message_t *resp);
+typedef int (*device_handle_fn)(device_t *dev, const message_t *req, message_t *resp);
 typedef int (*device_destroy_fn)(device_t *dev);
 
 struct device {
@@ -36,7 +36,7 @@ struct device {
     int child_count;
     device_id_t child_ids[32];
 
-    char registry_snapshot[DOMO_PAYLOAD_MAX];
+    char registry_snapshot[PAYLOAD_MAX];
 
     device_init_fn init;
     device_handle_fn handle_message;

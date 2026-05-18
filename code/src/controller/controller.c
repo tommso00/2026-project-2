@@ -27,21 +27,21 @@
 #include "ipc.h"
 
 static int ensure_runtime_dirs(void) {
-    if (mkdir(DOMO_RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return DOMO_ERR_SYSTEM;
-    if (mkdir(DOMO_FIFO_DIR, 0777) != 0 && errno != EEXIST) return DOMO_ERR_SYSTEM;
-    if (mkdir(DOMO_LOG_DIR, 0777) != 0 && errno != EEXIST) return DOMO_ERR_SYSTEM;
-    if (mkdir(DOMO_PID_DIR, 0777) != 0 && errno != EEXIST) return DOMO_ERR_SYSTEM;
-    if (mkdir(DOMO_REGISTRY_DIR, 0777) != 0 && errno != EEXIST) return DOMO_ERR_SYSTEM;
-    return DOMO_OK;
+    if (mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+    if (mkdir(FIFO_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+    if (mkdir(LOG_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+    if (mkdir(PID_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+    if (mkdir(REGISTRY_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+    return OK;
 }
 
 static int write_registry(const controller_t *controller) {
     FILE *fp;
     int i;
 
-    fp = fopen(DOMO_REGISTRY_FILE, "w");
+    fp = fopen(REGISTRY_FILE, "w");
     if (fp == NULL) {
-        return DOMO_ERR_SYSTEM;
+        return ERR_SYSTEM;
     }
 
     for (i = 0; i < controller->device_count; ++i) {
@@ -53,7 +53,7 @@ static int write_registry(const controller_t *controller) {
     }
 
     fclose(fp);
-    return DOMO_OK;
+    return OK;
 }
 
 static int spawn_bulb_process(device_id_t id, char *fifo_path, size_t fifo_path_len, pid_t *pid_out) {
@@ -61,13 +61,13 @@ static int spawn_bulb_process(device_id_t id, char *fifo_path, size_t fifo_path_
     char id_arg[32];
 
     snprintf(id_arg, sizeof(id_arg), "%d", id);
-    if (domo_make_device_fifo_path(id, fifo_path, fifo_path_len) != DOMO_OK) {
-        return DOMO_ERR_SYSTEM;
+    if (make_device_fifo_path(id, fifo_path, fifo_path_len) != OK) {
+        return ERR_SYSTEM;
     }
 
     pid = fork();
     if (pid < 0) {
-        return DOMO_ERR_SYSTEM;
+        return ERR_SYSTEM;
     }
 
     if (pid == 0) {
@@ -76,11 +76,11 @@ static int spawn_bulb_process(device_id_t id, char *fifo_path, size_t fifo_path_
               "--device-bulb",
               id_arg,
               (char *)NULL);
-        _exit(DOMO_ERR_SYSTEM);
+        _exit(ERR_SYSTEM);
     }
 
     *pid_out = pid;
-    return DOMO_OK;
+    return OK;
 }
 
 controller_device_entry_t *controller_find_device(controller_t *controller, device_id_t id) {
@@ -117,7 +117,7 @@ const controller_device_entry_t *controller_find_device_const(const controller_t
 
 int controller_init(controller_t *controller) {
     if (controller == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     memset(controller, 0, sizeof(*controller));
@@ -133,15 +133,15 @@ int controller_add_device(controller_t *controller, device_type_t type) {
     int rc;
 
     if (controller == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     if (controller->device_count >= CONTROLLER_MAX_DEVICES) {
-        return DOMO_ERR_NOT_ALLOWED;
+        return ERR_NOT_ALLOWED;
     }
 
     if (type != DEVICE_BULB) {
-        return DOMO_ERR_DEVICE_TYPE_MISMATCH;
+        return ERR_DEVICE_TYPE_MISMATCH;
     }
 
     entry = &controller->devices[controller->device_count];
@@ -149,12 +149,12 @@ int controller_add_device(controller_t *controller, device_type_t type) {
 
     entry->id = controller->next_device_id++;
     entry->type = type;
-    entry->state = DOMO_STATE_OFF;
-    entry->parent_id = DOMO_CONTROLLER_ID;
+    entry->state = STATE_OFF;
+    entry->parent_id = CONTROLLER_ID;
     entry->alive = true;
 
     rc = spawn_bulb_process(entry->id, entry->fifo_path, sizeof(entry->fifo_path), &pid);
-    if (rc != DOMO_OK) {
+    if (rc != OK) {
         return rc;
     }
 
@@ -162,14 +162,14 @@ int controller_add_device(controller_t *controller, device_type_t type) {
     controller->device_count++;
 
     rc = write_registry(controller);
-    if (rc != DOMO_OK) {
+    if (rc != OK) {
         return rc;
     }
 
     printf("Added device: id=%d type=%s pid=%d\n",
            entry->id, device_type_str(entry->type), (int)entry->pid);
 
-    return DOMO_OK;
+    return OK;
 }
 
 int controller_delete_device(controller_t *controller, device_id_t id) {
@@ -177,16 +177,16 @@ int controller_delete_device(controller_t *controller, device_id_t id) {
     int status;
 
     if (controller == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     dev = controller_find_device(controller, id);
     if (dev == NULL) {
-        return DOMO_ERR_DEVICE_NOT_FOUND;
+        return ERR_DEVICE_NOT_FOUND;
     }
 
     if (kill(dev->pid, SIGTERM) != 0) {
-        return DOMO_ERR_SYSTEM;
+        return ERR_SYSTEM;
     }
 
     waitpid(dev->pid, &status, 0);
@@ -200,7 +200,7 @@ int controller_list_devices(controller_t *controller) {
     int i;
 
     if (controller == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     printf("ID\tTYPE\tPID\tSTATE\tPARENT\n");
@@ -218,107 +218,107 @@ int controller_list_devices(controller_t *controller) {
                dev->parent_id);
     }
 
-    return DOMO_OK;
+    return OK;
 }
 
 int controller_info_device(controller_t *controller, device_id_t id) {
     const controller_device_entry_t *dev;
-    domo_message_t req;
-    domo_message_t resp;
-    char reply_fifo[DOMO_PATH_MAX];
+    message_t req;
+    message_t resp;
+    char reply_fifo[PATH_MAX];
     int rc;
 
     if (controller == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     dev = controller_find_device_const(controller, id);
     if (dev == NULL) {
-        return DOMO_ERR_DEVICE_NOT_FOUND;
+        return ERR_DEVICE_NOT_FOUND;
     }
 
     memset(&req, 0, sizeof(req));
-    req.kind = DOMO_MSG_REQUEST;
-    req.cmd = DOMO_CMD_INFO;
-    req.src_id = DOMO_CONTROLLER_ID;
+    req.kind = MSG_REQUEST;
+    req.cmd = CMD_INFO;
+    req.src_id = CONTROLLER_ID;
     req.dst_id = id;
     req.src_pid = getpid();
     req.request_id = (int)getpid();
 
-    rc = domo_make_reply_fifo_path(getpid(), req.request_id, reply_fifo, sizeof(reply_fifo));
-    if (rc != DOMO_OK) {
+    rc = make_reply_fifo_path(getpid(), req.request_id, reply_fifo, sizeof(reply_fifo));
+    if (rc != OK) {
         return rc;
     }
 
-    rc = domo_request_reply(dev->fifo_path, reply_fifo, &req, &resp);
-    if (rc != DOMO_OK) {
+    rc = request_reply(dev->fifo_path, reply_fifo, &req, &resp);
+    if (rc != OK) {
         return rc;
     }
 
-    if (resp.status != DOMO_OK) {
+    if (resp.status != OK) {
         return resp.status;
     }
 
     printf("%s\n", resp.payload);
-    return DOMO_OK;
+    return OK;
 }
 
 int controller_switch_device(controller_t *controller, device_id_t id, const char *label, const char *pos) {
     const controller_device_entry_t *dev;
-    domo_message_t req;
-    domo_message_t resp;
-    char reply_fifo[DOMO_PATH_MAX];
+    message_t req;
+    message_t resp;
+    char reply_fifo[PATH_MAX];
     int rc;
 
     if (controller == NULL || label == NULL || pos == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     dev = controller_find_device_const(controller, id);
     if (dev == NULL) {
-        return DOMO_ERR_DEVICE_NOT_FOUND;
+        return ERR_DEVICE_NOT_FOUND;
     }
 
     memset(&req, 0, sizeof(req));
-    req.kind = DOMO_MSG_REQUEST;
-    req.cmd = DOMO_CMD_SWITCH;
-    req.src_id = DOMO_CONTROLLER_ID;
+    req.kind = MSG_REQUEST;
+    req.cmd = CMD_SWITCH;
+    req.src_id = CONTROLLER_ID;
     req.dst_id = id;
     req.src_pid = getpid();
     req.request_id = (int)getpid();
     snprintf(req.arg1, sizeof(req.arg1), "%s", label);
     snprintf(req.arg2, sizeof(req.arg2), "%s", pos);
 
-    rc = domo_make_reply_fifo_path(getpid(), req.request_id, reply_fifo, sizeof(reply_fifo));
-    if (rc != DOMO_OK) {
+    rc = make_reply_fifo_path(getpid(), req.request_id, reply_fifo, sizeof(reply_fifo));
+    if (rc != OK) {
         return rc;
     }
 
-    rc = domo_request_reply(dev->fifo_path, reply_fifo, &req, &resp);
-    if (rc != DOMO_OK) {
+    rc = request_reply(dev->fifo_path, reply_fifo, &req, &resp);
+    if (rc != OK) {
         return rc;
     }
 
-    if (resp.status != DOMO_OK) {
+    if (resp.status != OK) {
         return resp.status;
     }
 
     printf("%s\n", resp.payload[0] ? resp.payload : "switch ok");
-    return DOMO_OK;
+    return OK;
 }
 
 int controller_link_devices(controller_t *controller, device_id_t child_id, device_id_t parent_id) {
     (void)controller;
     (void)child_id;
     (void)parent_id;
-    return DOMO_ERR_NOT_ALLOWED;
+    return ERR_NOT_ALLOWED;
 }
 
 int controller_destroy(controller_t *controller) {
     int i;
 
     if (controller == NULL) {
-        return DOMO_ERR_INVALID_PARAMETERS;
+        return ERR_INVALID_PARAMETERS;
     }
 
     for (i = 0; i < controller->device_count; ++i) {
@@ -331,5 +331,5 @@ int controller_destroy(controller_t *controller) {
     }
 
     write_registry(controller);
-    return DOMO_OK;
+    return OK;
 }

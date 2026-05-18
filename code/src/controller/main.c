@@ -17,19 +17,19 @@ int main(int argc, char **argv) {
     }
 
     rc = controller_init(&controller);
-    if (rc != DOMO_OK) {
-        fprintf(stderr, "controller_init failed: %s\n", domo_error_str(rc));
+    if (rc != OK) {
+        fprintf(stderr, "controller_init failed: %s\n", error_str(rc));
         return rc;
     }
 
     rc = controller_run(&controller);
-    if (rc != DOMO_OK) {
-        fprintf(stderr, "controller_run failed: %s\n", domo_error_str(rc));
+    if (rc != OK) {
+        fprintf(stderr, "controller_run failed: %s\n", error_str(rc));
     }
 
     {
         int cleanup_rc = controller_destroy(&controller);
-        if (cleanup_rc != DOMO_OK && rc == DOMO_OK) {
+        if (cleanup_rc != OK && rc == OK) {
             rc = cleanup_rc;
         }
     }

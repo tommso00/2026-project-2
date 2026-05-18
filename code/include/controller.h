@@ -12,9 +12,9 @@ typedef struct {
     device_id_t id;
     device_type_t type;
     pid_t pid;
-    domo_state_t state;
+    state_t state;
     device_id_t parent_id;
-    char fifo_path[DOMO_PATH_MAX];
+    char fifo_path[PATH_MAX];
     bool alive;
 } controller_device_entry_t;
 

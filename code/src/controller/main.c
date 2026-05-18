@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     int rc;
 
     if (argc == 3 && strcmp(argv[1], "--device-bulb") == 0) {
-        device_id id = (device_id_t)atoi(argv[2]);
+        device_id id = (device_id)atoi(argv[2]);
         return bulb_device_main(id);
     }
 

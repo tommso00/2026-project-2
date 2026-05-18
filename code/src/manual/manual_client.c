@@ -22,11 +22,11 @@ static int parse_device_id(const char *s, device_id *out_id) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    *out_id = (device_id_t)value;
+    *out_id = (device_id)value;
     return OK;
 }
 
-static int lookup_device_fifo(device_id id, char *fifo_path, size fifo_path_len) {
+static int lookup_device_fifo(device_id id, char *fifo_path, size_t fifo_path_len) {
     FILE *fp;
     int file_id;
     int pid_value;

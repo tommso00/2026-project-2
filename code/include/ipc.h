@@ -13,10 +13,18 @@ typedef struct {
     char payload[MAX_MSG_LEN];  // command-specific data (e.g., "power on")
 }domo_message;
 
-// IPC and FIFO function prototypes
-
+// IPC and FIFO management (from fifo.c)
 int ipc_open_fifo_read (int my_id, int *keepalive_fd);
+
+// MEssage formatting and parsing (from message.c)
 int ipc_recv_message(int fd_in, domo_message *msg);
 int ipc_send_message (const domo_message *msg);
 
+// Common IPC utilities (from ipc_common.c)
+void ipc_print_message(const domo_message *msg);
+void ipc_create_message(domo_message *msg, const char *sender, const char *cmd, int target, const char *payload);
+
+// REquest reply pattern (from request_reply.c)
+
+int ipc_send_requeest_and_wait(const domo_message *request, domo_message *response, int fd_in);
 #endif

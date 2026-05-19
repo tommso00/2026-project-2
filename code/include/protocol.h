@@ -1,6 +1,7 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+
 //ERROR CODES: Must match EXACTLY with the numeric values used in Bash.
 // naming convention: UPPER_SNAKE_CASE
 
@@ -36,5 +37,9 @@
 #define CMD_INFO            "INFO"
 #define CMD_DEL             "DEL"
 #define CMD_STATUS          "STATUS"
+
+// TIMEOUT CONFIGURATION: Must be > 3 to account or the mandatory 1-3s delay of devices
+#define TIMEOUT 7
+
 
 #endif

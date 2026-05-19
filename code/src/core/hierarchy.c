@@ -10,7 +10,7 @@ extern routing_node routing_table[MAX_DEVICES];
 //is_control_device
 //VAlidates if a device type is allowed to have children
 
-bool is_control_device(devcice_type type){
+bool is_control_device(device_type type){
     return (type == DEV_CONTROLLER || type == DEV_HUB || type == DEV_TIMER);
 }
 

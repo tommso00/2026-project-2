@@ -26,7 +26,7 @@ void ipc_create_message(domo_message *msg, const char *sender, const char *cmd, 
 
 // REquest reply pattern (from request_reply.c)
 
-int ipc_send_requeest_and_wait(const domo_message *request, domo_message *response, int fd_in);
+int ipc_send_request_and_wait(const domo_message *request, domo_message *response, int fd_in);
 
 //serialization and deserialization (from serialization.c)
 

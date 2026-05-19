@@ -13,7 +13,7 @@ int serialize_message(const domo_message *msg, char *buffer, size_t max_len){
     if (msg == NULL || buffer == NULL) return IPC_ERROR;
 
     // Format the message into the required protocol string
-	int len = snprintf(buffer, max_len), "%s|%s|%d|%s\n", msg->sender_id, msg->command, msg->target_id, msg->payload);
+	int len = snprintf(buffer, max_len, "%s|%s|%d|%s\n", msg->sender_id, msg->command, msg->target_id, msg->payload);
 	
 	// check if string is interrupted in the middle
 	if(len<0 || (size_t)len >=max_len){

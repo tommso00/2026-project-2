@@ -15,7 +15,7 @@ typedef struct {
 
 // IPC and FIFO function prototypes
 
-int ipc_open_fifo_read (int my_id), int *keepalive-fd);
+int ipc_open_fifo_read (int my_id, int *keepalive_fd);
 int ipc_recv_message(int fd_in, domo_message *msg);
 int ipc_send_message (const domo_message *msg);
 

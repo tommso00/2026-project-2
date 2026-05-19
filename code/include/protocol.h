@@ -1,5 +1,5 @@
-#ifndef __PROTOCOl_H__
-#define __PROTOCOL_H__
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
 
 //ERROR CODES: Must match EXACTLY with the numeric values used in Bash.
 // naming convention: UPPER_SNAKE_CASE
@@ -7,7 +7,7 @@
 #define OK                      0
 #define DEVICE_NOT_FOUND        1
 #define INVALID_COMMAND         2
-#define LINK _FAILED            3
+#define LINK_FAILED             3
 #define DEVICE_TYPE_MISMATCH    4
 #define IPC_ERROR               5
 #define CYCLE_DETECTED          6
@@ -17,12 +17,12 @@
 #define REGISTRY_PATH       "/tmp/domotica_registry"
 #define FIFO_PATH_PREFIX    "/tmp/domotica_fifo_"
 
-//MESSAGE PROTOCOL AND LIMITS: format: SENDER_IDCOMMANDTARGET_ID|PAYLOAD
+//MESSAGE PROTOCOL AND LIMITS: format: SENDER_ID|COMMAND|TARGET_ID|PAYLOAD
 
 #define MAX_MSG_LEN         1024    //maximum buffer size for a message
 #define MSG_DELIMITER       "|"     // delimiter used for strtok
 #define MSG_DELIMITER_CHAR  '|'     // delimiter as a single character
-#define NEWLINE_CHAT        '\n'    // mandatory message terminator
+#define NEWLINE_CHAR        '\n'    // mandatory message terminator
 
 // SPECIAL IDENTIFIERS
 

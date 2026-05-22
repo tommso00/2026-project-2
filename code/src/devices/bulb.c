@@ -47,14 +47,14 @@ static int build_info_payload(const bulb_ctx *ctx, char *buf, size_t len) {
     return OK;
 }
 
-static int handle_request(bulb_ctx *ctx, const message *req, message *resp) {
+static int handle_request(bulb_ctx *ctx, const domo_message *req, domo_message *resp) {
     if (ctx == NULL || req == NULL || resp == NULL) {
         return ERR_INVALID_PARAMETERS;
     }
 
     memset(resp, 0, sizeof(*resp));
     resp->kind = MSG_RESPONSE;
-    resp->cmd = req->cmd;
+    snprintf(resp->command, sizeof(resp->command), "%s", req->command);
     resp->src_id = ctx->id;
     resp->dst_id = req->src_id;
     resp->src_pid = getpid();
@@ -93,8 +93,8 @@ static int handle_request(bulb_ctx *ctx, const message *req, message *resp) {
 
 int bulb_device_main(device_id id) {
     bulb_ctx ctx;
-    message req;
-    message resp;
+    domo_message req;
+    domo_message resp;
     int fd;
     int dummy_fd;
 
@@ -123,7 +123,7 @@ int bulb_device_main(device_id id) {
     dummy_fd = open(ctx.fifo_path, O_WRONLY | O_NONBLOCK);
 
     while (keep_running) {
-        int rc = recv_message(fd, &req);
+        int rc = ipc_recv_message(fd, &req);
         if (rc != OK) {
             continue;
         }
@@ -134,12 +134,12 @@ int bulb_device_main(device_id id) {
         }
 
         if (req.payload[0] != '\0') {
-            rc = send_message(req.payload, &resp);
+            rc = send_message_to_fifo(req.payload, &resp);
         } else {
             char reply_fifo[PATH_MAX];
             rc = make_reply_fifo_path(req.src_pid, req.request_id, reply_fifo, sizeof(reply_fifo));
             if (rc == OK) {
-                rc = send_message(reply_fifo, &resp);
+                rc = send_message_to_fifo(reply_fifo, &resp);
             }
         }
 

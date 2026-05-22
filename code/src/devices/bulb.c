@@ -10,12 +10,9 @@
 #include "common.h"
 #include "error_codes.h"
 #include "ipc.h"
-<<<<<<< Updated upstream
-=======
 #include "routing.h"
 #include "protocol.h"
 #include "utils.h"
->>>>>>> Stashed changes
 
 static volatile sig_atomic_t keep_running = 1;
 
@@ -66,11 +63,10 @@ static int handle_request(bulb_ctx *ctx, const message *req, message *resp) {
 
     simulate_random_delay();
 
-    switch (req->cmd) {
-        case CMD_INFO:
-            return build_info_payload(ctx, resp->payload, sizeof(resp->payload));
-
-        case CMD_SWITCH:
+    if (strcmp(req->command, CMD_INFO) == 0) {
+        return build_info_payload(ctx, resp->payload, sizeof(resp->payload));
+    }
+    if (strcmp(req->command, CMD_SWITCH) == 0) {
             if (strcmp(req->arg1, "power") != 0) {
                 resp->status = ERR_INVALID_PARAMETERS;
                 return OK;
@@ -88,11 +84,11 @@ static int handle_request(bulb_ctx *ctx, const message *req, message *resp) {
             snprintf(resp->payload, sizeof(resp->payload),
                      "bulb %d switched %s", ctx->id, state_str(ctx->state));
             return OK;
+        }
 
-        default:
+
             resp->status = ERR_INVALID_COMMAND;
             return OK;
-    }
 }
 
 int bulb_device_main(device_id id) {

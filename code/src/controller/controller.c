@@ -254,9 +254,9 @@ int controller_delete_device(controller *controller, device_id id)
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    int tempID = dev->info.id;
-    const char *tempDeviceType = device_type_str(dev->info.type);
-    int tempPid = (int)dev->info.pid;
+    // int tempID = dev->info.id;
+    // const char *tempDeviceType = device_type_str(dev->info.type);
+    // int tempPid = (int)dev->info.pid;
 
     if(kill(dev->info.pid, SIGTERM) != 0) {
         return ERR_SYSTEM;
@@ -266,8 +266,7 @@ int controller_delete_device(controller *controller, device_id id)
     waitpid(dev->info.pid, &status, 0);
     dev->info.pid = 0;
 
-    printf("Deleted device: id=%d type=%s pid=%d\n",
-           tempID, tempDeviceType, (tempPid));
+    //printf("Deleted device: id=%d type=%s pid=%d\n", tempID, tempDeviceType, (tempPid));
 
     return write_registry(controller);
 }

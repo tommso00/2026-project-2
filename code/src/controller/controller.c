@@ -1,8 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
-#include <signal.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,8 +13,8 @@
 #include "controller.h"
 #include "error_codes.h"
 #include "ipc.h"
-#include "routing.h"
 #include "protocol.h"
+#include "routing.h"
 
 static int ensure_runtime_dirs(void) {
     if(mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
@@ -24,7 +24,6 @@ static int ensure_runtime_dirs(void) {
     if(mkdir(REGISTRY_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
     return OK;
 }
-
 
 //just to have it here so it's more clear 
 static bool fifo_not_ready_errno(int err) {
@@ -267,16 +266,16 @@ static int spawn_window_process(device_id id, pid_t *pid_out) {
 
 static int spawn_fridge_process(device_id id, pid_t *pid_out) {
     pid_t pid;
-    char id_arg[32];
+    char id_arg[32] ;
 
     snprintf(id_arg,sizeof(id_arg), "%d", id);
 
-    pid = fork();
-    if (pid < 0) {
+    pid =fork() ;
+    if (pid <0) {
         return ERR_SYSTEM;
     }
 
-    if(pid == 0){
+    if(pid==0){
         // child process - exec fridge
         execl("./bin/domotics_controller","controller","--device-fridge",id_arg,(char *)NULL);
         _exit(ERR_SYSTEM);
@@ -284,6 +283,47 @@ static int spawn_fridge_process(device_id id, pid_t *pid_out) {
     *pid_out= pid;
 
 
+    return OK;
+}
+
+static int spawn_hub_process(device_id id, pid_t *pid_out) {
+    pid_t pid;
+    char id_arg[32];
+
+    snprintf(id_arg, sizeof(id_arg), "%d",id);
+
+    pid = fork();
+    if (pid < 0){
+        return ERR_SYSTEM;
+    }
+
+    if(pid == 0){
+        execl("./bin/domotics_controller","controller","--device-hub",id_arg,(char *)NULL);
+        _exit(ERR_SYSTEM);
+    }
+
+    *pid_out=pid;
+    return OK;
+}
+
+static int spawn_timer_process(device_id id, pid_t *pid_out) {
+    pid_t pid ;
+    char id_arg[32];
+
+    snprintf(id_arg, sizeof(id_arg), "%d", id);
+
+    pid = fork() ;
+    if (pid <0)
+	{
+        return ERR_SYSTEM;
+    }
+
+    if(pid == 0){
+        execl("./bin/domotics_controller","controller","--device-timer",id_arg,(char *)NULL);
+        _exit(ERR_SYSTEM);
+    }
+
+    *pid_out = pid;
     return OK;
 }
 
@@ -370,7 +410,12 @@ int controller_add_device(controller *controller, device_type type) {
         case DEVICE_FRIDGE:
             rc= spawn_fridge_process(dev->info.id , &pid);
             break;
-            //QUA BISOGNA IMPLEMENTARE HUB
+        case DEVICE_HUB:
+            rc=spawn_hub_process(dev->info.id, &pid);
+            break;
+        case DEVICE_TIMER:
+            rc= spawn_timer_process(dev->info.id, &pid);
+            break;
         default:
             return ERR_DEVICE_TYPE_MISMATCH;
     }
@@ -593,11 +638,76 @@ int controller_switch_device(controller *controller, device_id id, const char *l
 }
 
 int controller_link_devices(controller *controller, device_id child_id, device_id parent_id) {
-    // TODO: implement device linking
-    (void)controller;
-    (void)child_id;
-    (void)parent_id;
-    return ERR_NOT_ALLOWED;
+    device *child;
+    const device *parent;
+    domo_message child_msg;
+    domo_message parent_msg;
+    int rc;
+    
+    if(controller==NULL) {
+        return ERR_INVALID_PARAMETERS ;
+    }
+    
+    child=controller_find_device(controller,child_id) ;
+    if( child==NULL ){
+        return ERR_DEVICE_NOT_FOUND;
+    }
+    
+    parent=controller_find_device_const(controller,parent_id) ;
+    if(parent==NULL) {
+        return ERR_DEVICE_NOT_FOUND ;
+    }
+    
+    // link them in the routing table
+    rc=routing_link_devices(child_id,parent_id) ;
+    if(rc!=OK) {
+        return rc;
+    }
+    
+    memset(&child_msg,0,sizeof(child_msg));
+    child_msg.kind=MSG_REQUEST ;
+    snprintf(child_msg.sender_id,sizeof(child_msg.sender_id),"%d",CONTROLLER_ID);
+    snprintf(child_msg.command,sizeof(child_msg.command),"%s",CMD_LINK) ;
+    child_msg.src_id=CONTROLLER_ID;
+    child_msg.dst_id=child_id ;
+    child_msg.target_id=child_id ;
+    child_msg.src_pid=getpid() ;
+    child_msg.request_id=(int)getpid();
+    snprintf(child_msg.payload,sizeof(child_msg.payload),"parent,%d",parent_id) ;
+    
+    rc=send_message_to_fifo(child->info.fifo_path,&child_msg) ;
+    if(rc!=OK && rc!=ERR_DEVICE_NOT_FOUND) {
+        routing_link_devices(child_id,child->info.logical_parent_id) ;
+        return rc ;
+    }
+    
+    // notify parent if it's a control device
+    if( is_control_device(parent->info.type) ){
+        memset(&parent_msg,0,sizeof(parent_msg)) ;
+        parent_msg.kind=MSG_REQUEST ;
+        snprintf(parent_msg.sender_id,sizeof(parent_msg.sender_id),"%d",CONTROLLER_ID) ;
+        snprintf(parent_msg.command,sizeof(parent_msg.command),"%s",CMD_STATUS) ;
+        parent_msg.src_id=CONTROLLER_ID ;
+        parent_msg.dst_id=parent_id ;
+        parent_msg.target_id=parent_id ;
+        parent_msg.src_pid=getpid();
+        parent_msg.request_id=(int)getpid() ;
+        snprintf(parent_msg.payload,sizeof(parent_msg.payload),"child_added,%d",child_id) ;
+        
+        rc=send_message_to_fifo(parent->info.fifo_path,&parent_msg) ;
+        if(rc!=OK && rc!=ERR_DEVICE_NOT_FOUND) {
+            return rc;
+        }
+    }
+    
+    child->info.logical_parent_id=parent_id ;
+    rc=write_registry(controller) ;
+    if(rc!=OK) {
+        return rc ;
+    }
+    
+    printf("Linked device %d to %d\n",child_id,parent_id);
+    return OK;
 }
 
 int controller_destroy(controller *controller) 

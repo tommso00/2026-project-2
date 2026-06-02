@@ -103,7 +103,7 @@ int device_common_setup_fifo(device *dev)
         return ERR_INVALID_PARAMETERS;
     }
 
-	//two lines necessary to be sure that precedent run does not influence this one
+	//this two lines are necessary to be sure that precedent run does not influence this one
     unlink(dev->info.fifo_path);
     if(mkfifo(dev->info.fifo_path, 0666) != 0 && errno != EEXIST) {
         return ERR_SYSTEM;
@@ -150,7 +150,6 @@ int device_common_open_fifo(device *dev, int *fd_out, int *dummy_fd_out) {
         unlink(dev->info.fifo_path) ;
         return ERR_SYSTEM;
     }
-
 
     dummy_fd = open(dev->info.fifo_path, O_WRONLY | O_NONBLOCK);
 

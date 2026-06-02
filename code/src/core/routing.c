@@ -73,7 +73,7 @@ int routing_get_parent_id(int id,int *parent_id_out) {
     // loop through the routing table
     for(i=0;i<MAX_DEVICES;i++) {
         if( routing_table[ i ].id==id ){
-            *parent_id_out=routing_table[ i ].parent_id ;
+            *parent_id_out=routing_table[i].parent_id ;
             return OK;
         }
     }
@@ -97,7 +97,7 @@ int routing_collect_children(int parent_id,device_id *children_out,int max_child
             if( n>=max_children ){
                 return ERR_INVALID_PARAMETERS;
             }
-            children_out[ n++ ]=(device_id)routing_table[ i ].id ;
+            children_out[ n++]=(device_id)routing_table[ i ].id ;
         }
     }
     

@@ -88,6 +88,7 @@ int ipc_recv_message(int fd_in, domo_message *msg){
     } else {
         msg->payload[0] ='\0';
     }
+
     return OK;
 }
 

@@ -15,6 +15,7 @@
 #include "ipc.h"
 #include "protocol.h"
 #include "routing.h"
+#include "event_loop.h"
 
 static int ensure_runtime_dirs(void) {
     if(mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
@@ -728,4 +729,15 @@ int controller_destroy(controller *controller)
 
     write_registry(controller);
     return OK;
+}
+
+int controller_run(controller *ctrl) {
+    if (ctrl == NULL) {
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    printf("Domotics controller started.\n");
+    printf("Type 'help' for available commands.\n");
+
+    return event_loop_run(ctrl);
 }

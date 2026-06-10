@@ -3,12 +3,15 @@
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "common.h"
 #include "controller.h"
 #include "error_codes.h"
 #include "ipc.h"
 #include "repl.h"
+#include "cleanup.h"
+#include <stdarg.h>
 
 static int handle_stdin_event(controller *ctrl) {
     if (ctrl == NULL) {
@@ -18,23 +21,71 @@ static int handle_stdin_event(controller *ctrl) {
     return repl_read_and_execute(ctrl);
 }
 
-static int handle_controller_fifo_event(controller *ctrl, int fifo_fd) {
-    domo_message msg;
-    int rc;
+static void eventloop_print_async_line(const char *fmt, ...)
+{
+    va_list ap;
+
+    if (fmt == NULL) {
+        return;
+    }
+
+    fprintf(stderr, "\r");
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+}
+
+static int handle_controller_fifo_event(controller *ctrl, int fifo_fd)
+{
+    int handled_any = 0;
 
     if (ctrl == NULL || fifo_fd < 0) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    memset(&msg, 0, sizeof(msg));
+    for (;;) {
+        domo_message msg;
+        int rc;
 
-    rc = ipc_recv_message(fifo_fd, &msg);
-    if (rc != OK) {
-        return rc;
+        memset(&msg, 0, sizeof(msg));
+        rc = ipc_recv_message(fifo_fd, &msg);
+
+        if (rc != OK) {
+            return handled_any ? OK : rc;
+        }
+
+        handled_any = 1;
+
+        if (strcmp(msg.command, "STATUS") == 0) {
+            eventloop_print_async_line(
+                "[status] sender=%s target=%d payload=%s",
+                (msg.sender_id[0] != '\0') ? msg.sender_id : "?",
+                msg.target_id,
+                (msg.payload[0] != '\0') ? msg.payload : "(empty)"
+            );
+            continue;
+        }
+
+        if (strcmp(msg.command, "OVERRIDE") == 0) {
+            eventloop_print_async_line(
+                "[override] sender=%s target=%d payload=%s",
+                (msg.sender_id[0] != '\0') ? msg.sender_id : "?",
+                msg.target_id,
+                (msg.payload[0] != '\0') ? msg.payload : "(empty)"
+            );
+            continue;
+        }
+
+        eventloop_print_async_line(
+            "[%s] sender=%s target=%d payload=%s",
+            (msg.command[0] != '\0') ? msg.command : "ipc",
+            (msg.sender_id[0] != '\0') ? msg.sender_id : "?",
+            msg.target_id,
+            (msg.payload[0] != '\0') ? msg.payload : "(empty)"
+        );
     }
-
-    ipc_print_message(&msg);
-    return OK;
 }
 
 int event_loop_run(controller *ctrl) {
@@ -58,6 +109,11 @@ int event_loop_run(controller *ctrl) {
     while (ctrl->running) {
         fd_set readfds;
 
+        if (cleanup_has_pending_sigchld()) {
+            cleanup_reap_terminated_children(ctrl);
+            prompt_visible = 0;
+        }
+
         FD_ZERO(&readfds);
         FD_SET(STDIN_FILENO, &readfds);
         FD_SET(fifo_fd, &readfds);
@@ -72,11 +128,20 @@ int event_loop_run(controller *ctrl) {
         rc = select(max_fd + 1, &readfds, NULL, NULL, NULL);
         if (rc < 0) {
             if (errno == EINTR) {
+                if (cleanup_has_pending_sigchld()) {
+                    cleanup_reap_terminated_children(ctrl);
+                    prompt_visible = 0;
+                }
                 continue;
             }
             close(fifo_fd);
             close(keepalive_fd);
             return ERR_SYSTEM;
+        }
+
+        if (cleanup_has_pending_sigchld()) {
+            cleanup_reap_terminated_children(ctrl);
+            prompt_visible = 0;
         }
 
         if (FD_ISSET(STDIN_FILENO, &readfds)) {
@@ -98,6 +163,7 @@ int event_loop_run(controller *ctrl) {
 
             if (rc != OK) {
                 fprintf(stderr, "IPC error: %s\n", error_str(rc));
+                prompt_visible = 0;
             }
         }
     }

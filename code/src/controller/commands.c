@@ -65,21 +65,25 @@ static int validate_child_exists(const controller *ctrl, device_id child_id){
 }
 
 static int validate_parent_for_link(const controller *ctrl, device_id parent_id){
-    const controller_device_entry *parent_entry;
+    const device *parent_entry;
 
-    if(ctrl ==NULL){
+    if(ctrl == NULL){
         return ERR_INVALID_PARAMETERS;
     }
-    if(parent_id==CONTROLLER_ID){
+
+    if(parent_id == CONTROLLER_ID){
         return OK;
     }
+
     parent_entry = controller_find_device_const(ctrl, parent_id);
-    if(parent_entry==NULL){
+    if(parent_entry == NULL){
         return ERR_DEVICE_NOT_FOUND;
     }
-    if( !device_is_control(parent_entry->type)){
+
+    if(!device_is_control(parent_entry->info.type)){
         return ERR_DEVICE_TYPE_MISMATCH;
     }
+
     return OK;
 }
 

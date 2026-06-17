@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include "routing.h"
@@ -72,6 +73,8 @@ static void device_handle_child_removed(device *dev,const domo_message *req)
         }
     }
 }
+
+
 /**
  * Initializing a common device, for now it is just a device, in the future it will become the right device(bulb, window...)
  */
@@ -137,19 +140,6 @@ int device_common_open_fifo(device *dev, int *fd_out, int *dummy_fd_out) {
         unlink(dev->info.fifo_path);
         return ERR_SYSTEM;}
 
-    int flags = fcntl(fd, F_GETFL);
-    if (flags <0) {
-        perror("fcntl F_GETFL failed");
-        close(fd);
-        unlink(dev->info.fifo_path);
-        return ERR_SYSTEM;
-    }
-    if (fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) <0) {
-        perror("fcntl F_SETFL failed");
-        close(fd) ;
-        unlink(dev->info.fifo_path) ;
-        return ERR_SYSTEM;
-    }
 
     dummy_fd = open(dev->info.fifo_path, O_WRONLY | O_NONBLOCK);
 
@@ -174,53 +164,73 @@ int device_common_main_loop(device *dev, int fd) {
 
     // main event loop
     while(device_keep_running) {
-        rc = ipc_recv_message(fd, &req);
-        if(rc != OK) {
-            if (!device_keep_running) {
-                break;
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
+
+        rc = select(fd + 1, &readfds, NULL, NULL, NULL);
+        if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
             }
-            continue;
+            return ERR_SYSTEM;
         }
 
-if (device_is_del_command(&req)) {
-            device_keep_running = 0;
+        if (!device_keep_running) {
             break;
         }
 
-        if (strcmp(req.command, CMD_STATUS) == 0) {
-            device_handle_child_removed(dev, &req);
-            if (strncmp(req.payload, "child_removed,", 14) == 0) {
-                continue;
-            }
-        }
-
-        // Backward-compat: older clients encode SWITCH args only in payload (e.g. "power on" / "power,on").
-        if (strcmp(req.command, CMD_SWITCH) == 0 && req.arg1[0] == '\0' && req.payload[0] != '\0') {
-            char label[sizeof(req.arg1)] = {0};
-            char pos[sizeof(req.arg2)] = {0};
-
-            if (sscanf(req.payload, "%31[^ ,],%31s", label, pos) == 2 ||
-                sscanf(req.payload, "%31s %31s", label, pos) == 2) {
-                snprintf(req.arg1, sizeof(req.arg1), "%s", label);
-                snprintf(req.arg2, sizeof(req.arg2), "%s", pos);
-            }
-        }
-
-        if(dev->handle_message != NULL) {
-            rc = dev->handle_message(dev, &req, &resp);
-            if (rc != OK) {
+        if (FD_ISSET(fd, &readfds)) {
+            rc = ipc_recv_message(fd, &req);
+            if(rc != OK) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    continue;
+                }
+                if (!device_keep_running) {
+                    break;
+                }
                 continue;
             }
 
-            char reply_fifo[PATH_MAX];
-            rc = make_reply_fifo_path(req.src_pid, req.request_id, 
-                                      reply_fifo, sizeof(reply_fifo));
-            if(rc == OK) {
-                send_message_to_fifo(reply_fifo, &resp);
+            if (device_is_del_command(&req)) {
+                device_keep_running = 0;
+                break;
+            }
+
+            if (strcmp(req.command, CMD_STATUS) == 0) {
+                device_handle_child_removed(dev, &req);
+                if (strncmp(req.payload, "child_removed,", 14) == 0) {
+                    continue;
+                }
+            }
+
+            // Backward-compat: older clients encode SWITCH args only in payload (e.g. "power on" / "power,on").
+            if (strcmp(req.command, CMD_SWITCH) == 0 && req.arg1[0] == '\0' && req.payload[0] != '\0') {
+                char label[sizeof(req.arg1)] = {0};
+                char pos[sizeof(req.arg2)] = {0};
+
+                if (sscanf(req.payload, "%31[^ ,],%31s", label, pos) == 2 ||
+                    sscanf(req.payload, "%31s %31s", label, pos) == 2) {
+                    snprintf(req.arg1, sizeof(req.arg1), "%s", label);
+                    snprintf(req.arg2, sizeof(req.arg2), "%s", pos);
+                }
+            }
+
+            if(dev->handle_message != NULL) {
+                rc = dev->handle_message(dev, &req, &resp);
+                if (rc != OK) {
+                    continue;
+                }
+
+                char reply_fifo[PATH_MAX];
+                rc = make_reply_fifo_path(req.src_pid, req.request_id, 
+                                          reply_fifo, sizeof(reply_fifo));
+                if(rc == OK) {
+                    send_message_to_fifo(reply_fifo, &resp);
+                }
             }
         }
     }
-
     return OK;
 }
 

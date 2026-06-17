@@ -78,6 +78,7 @@ static int fridge_handle_message(device *dev, const domo_message *req, domo_mess
 
     memset(resp, 0, sizeof(*resp));
     resp->kind = MSG_RESPONSE;
+    //I have to check here because something is off I think
     snprintf(resp->command, sizeof(resp->command), "%s", req->command);
     //line for the 
     snprintf(resp->sender_id, sizeof(resp->sender_id), "%d", fridge->base.info.id);
@@ -134,6 +135,44 @@ static int fridge_handle_message(device *dev, const domo_message *req, domo_mess
 
         resp->status = ERR_INVALID_PARAMETERS;
         snprintf(resp->payload, sizeof(resp->payload), "invalid switch label");
+        return OK;
+    }
+
+    // Handle SET command for manual-only parameters
+    if(strcmp(req->command, "SET") == 0) {
+        // Only allow manual interaction for perc and thermostat
+        if(strcmp(req->sender_id, EXT_SENDER_ID) != 0) {
+            resp->status = ERR_PERMISSION_DENIED;
+            snprintf(resp->payload, sizeof(resp->payload), "manual-only parameter");
+            return OK;
+        }
+
+        if(strcmp(req->arg1, "perc") == 0) {
+            int new_perc = atoi(req->arg2);
+            if(new_perc < 0 || new_perc > 100) {
+                resp->status = ERR_INVALID_PARAMETERS;
+                snprintf(resp->payload, sizeof(resp->payload), "perc must be 0-100");
+                return OK;
+            }
+            fridge->fill_percentage = new_perc;
+            snprintf(resp->payload, sizeof(resp->payload), "fridge %d perc set to %d", fridge->base.info.id, fridge->fill_percentage);
+            return OK;
+        }
+
+        if(strcmp(req->arg1, "thermostat") == 0) {
+            int new_temp = atoi(req->arg2);
+            if(new_temp < -10 || new_temp > 10) {
+                resp->status = ERR_INVALID_PARAMETERS;
+                snprintf(resp->payload, sizeof(resp->payload), "thermostat must be -10 to 10");
+                return OK;
+            }
+            fridge->thermostat_temp = new_temp;
+            snprintf(resp->payload, sizeof(resp->payload), "fridge %d thermostat set to %d", fridge->base.info.id, fridge->thermostat_temp);
+            return OK;
+        }
+
+        resp->status = ERR_INVALID_PARAMETERS;
+        snprintf(resp->payload, sizeof(resp->payload), "invalid set parameter");
         return OK;
     }
 

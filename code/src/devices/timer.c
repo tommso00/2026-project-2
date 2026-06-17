@@ -221,7 +221,7 @@ static int timer_handle_message(device *dev,const domo_message *req,domo_message
                 snprintf(resp->payload,sizeof(resp->payload),"begin must be before end");
                 return OK;
             }
-            snprintf(timer->begin_time,sizeof(timer->begin_time),"%s",req->arg2);
+            snprintf(timer->begin_time,sizeof(timer->begin_time),"%.5s",req->arg2);
             snprintf(resp->payload,sizeof(resp->payload),"timer %d begin set to %s",timer->base.info.id,timer->begin_time);
             return OK;
         }
@@ -239,7 +239,7 @@ static int timer_handle_message(device *dev,const domo_message *req,domo_message
                 snprintf(resp->payload,sizeof(resp->payload),"end must be after begin");
                 return OK;
             }
-            snprintf(timer->end_time,sizeof(timer->end_time),"%s",req->arg2);
+            snprintf(timer->end_time,sizeof(timer->end_time),"%.5s",req->arg2);
             snprintf(resp->payload,sizeof(resp->payload),"timer %d end set to %s",timer->base.info.id,timer->end_time);
             return OK;
         }

@@ -168,7 +168,12 @@ int device_common_main_loop(device *dev, int fd) {
         FD_ZERO(&readfds);
         FD_SET(fd, &readfds);
 
-        rc = select(fd + 1, &readfds, NULL, NULL, NULL);
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        rc = select(fd + 1, &readfds, NULL, NULL, &tv);
+
         if (rc < 0) {
             if (errno == EINTR) {
                 continue;
@@ -179,8 +184,11 @@ int device_common_main_loop(device *dev, int fd) {
         if (!device_keep_running) {
             break;
         }
-
-        if (FD_ISSET(fd, &readfds)) {
+            if (dev->update != NULL){
+                dev->update(dev);
+            }
+            
+        if (rc>0 && FD_ISSET(fd, &readfds)) {
             rc = ipc_recv_message(fd, &req);
             if(rc != OK) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {

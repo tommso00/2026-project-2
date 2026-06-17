@@ -21,11 +21,13 @@ typedef struct {
     int close_switch_state; //if 0 is off, if 1 is on
 } window_device;
 
+static int window_update(device *dev);
+
 static const char *state_str(state state) {
-    switch (state) {
-        case STATE_OPEN: return "open";
-        case STATE_CLOSED: return "closed";
-        default: return "unknown";
+    if (state == STATE_OPEN){
+        return "open";
+    }else{
+        return "closed";
     }
 }
 
@@ -51,6 +53,7 @@ static void update_usage_time(window_device *window)
 static int window_build_info_payload(window_device *window, char *buf, size_t len) {
     if (window == NULL || buf == NULL) {
         return ERR_INVALID_PARAMETERS;}
+
     update_usage_time(window)  ;
     //update_usage_time((window_device *)window)  ;
 
@@ -69,6 +72,7 @@ static int window_handle_message(device *dev, const domo_message *req, domo_mess
     if (dev->info.type != DEVICE_WINDOW) {
         return ERR_DEVICE_TYPE_MISMATCH;
     }
+    window_update(dev);
 
     window_device *window = (window_device *)dev;
 
@@ -118,14 +122,14 @@ static int window_handle_message(device *dev, const domo_message *req, domo_mess
                 
                 window->last_state_change = time(NULL) ; 
                 window->open_switch_state = 1;
-                window->open_switch_state = 0;
+                window->close_switch_state = 0;
             }else if (strcmp(req->arg1, "close") == 0) {
 
                 window->base.info.state = STATE_CLOSED;
                 
                 window->last_state_change = 0; 
                 window->close_switch_state = 1;
-                window->close_switch_state = 0;
+                window->open_switch_state = 0;
             }
         }
 
@@ -152,10 +156,12 @@ static int window_init(device *dev){
     if(window==NULL){
         return ERR_INVALID_PARAMETERS;    }
 
+    window->base.info.state = STATE_CLOSED;
+
     window-> last_state_change=0;
     window->total_open_time=0 ;
     window->open_switch_state = 0;
-    window->close_switch_state = 0;
+    window->close_switch_state = 1;
 
     return OK;
 

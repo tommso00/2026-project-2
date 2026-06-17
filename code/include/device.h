@@ -30,6 +30,7 @@ typedef struct device device ;
 typedef int (*device_init)(device *dev) ;
 typedef int (*device_handle)( device *dev,const domo_message *req,domo_message *resp);
 typedef int (*device_destroy)(device *dev);
+typedef int (*device_update) (device *dev);
 
 struct device_impl;
 
@@ -50,6 +51,7 @@ struct device {
     device_init init;
     device_handle handle_message;
     device_destroy destroy;
+    device_update update;
 
     struct device_impl *impl;
 };

@@ -16,6 +16,9 @@ typedef struct {
     device base;
     time_t last_state_change;
     unsigned long total_open_time;
+
+    int open_switch_state; //if 0 is off, if 1 is on
+    int close_switch_state; //if 0 is off, if 1 is on
 } window_device;
 
 static const char *state_str(state state) {
@@ -52,8 +55,9 @@ static int window_build_info_payload(window_device *window, char *buf, size_t le
     //update_usage_time((window_device *)window)  ;
 
     snprintf(buf, len,
-             "window id=%d state=%s time=%lu",
-             window->base.info.id, state_str(window->base.info.state), window->total_open_time);
+             "window id=%d state=%s time=%lu open_switch=%d close_switch=%d",
+             window->base.info.id, state_str(window->base.info.state), window->total_open_time,
+             window->open_switch_state, window->close_switch_state);
     return OK;
 }
 
@@ -113,13 +117,17 @@ static int window_handle_message(device *dev, const domo_message *req, domo_mess
                 window->base.info.state = STATE_OPEN;
                 
                 window->last_state_change = time(NULL) ; 
+                window->open_switch_state = 1;
+                window->open_switch_state = 0;
             }else if (strcmp(req->arg1, "close") == 0) {
 
                 window->base.info.state = STATE_CLOSED;
                 
                 window->last_state_change = 0; 
+                window->close_switch_state = 1;
+                window->close_switch_state = 0;
             }
-        }//if it is off nothing happen because the flag is always turned off after changing state
+        }
 
         snprintf(resp->payload, sizeof(resp->payload),
                  "window %d switched %s", window->base.info.id, state_str(window->base.info.state));
@@ -146,6 +154,8 @@ static int window_init(device *dev){
 
     window-> last_state_change=0;
     window->total_open_time=0 ;
+    window->open_switch_state = 0;
+    window->close_switch_state = 0;
 
     return OK;
 
@@ -164,6 +174,19 @@ static int window_destroy(device *dev){
     
 }
 
+static int window_update(device *dev) {
+    window_device *window = (window_device *)dev;
+    
+    if (window == NULL) {
+        return ERR_INVALID_PARAMETERS;
+    }
+    
+    // Update open time counter
+    update_usage_time(window);
+    
+    return OK;
+}
+
 
 int window_device_main(device_id id){
     window_device window;
@@ -180,6 +203,7 @@ int window_device_main(device_id id){
         
         window.base.handle_message= window_handle_message;
         window.base.destroy=window_destroy;
+        window.base.update=window_update;
 
         
         rc= window_init(&window.base) ;

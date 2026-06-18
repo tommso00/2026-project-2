@@ -830,7 +830,7 @@ int controller_delete_device(controller *ctrl, device_id id)
         return rc;
     }
 
-    if (is_control_device(dev->info.type)) {
+    if (device_is_control(dev->info.type)) {
         rc = controller_delete_children_cascade(ctrl, id);
         if (rc != OK) {
             return rc;
@@ -1136,8 +1136,12 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
     const device *parent;
     domo_message child_msg;
     domo_message parent_msg;
+    domo_message child_resp;
+    domo_message parent_resp;
+    char reply_fifo[PATH_MAX];
     int rc;
     int old_parent_id;
+    int request_id;
 
     if (controller == NULL) {
         return ERR_INVALID_PARAMETERS;
@@ -1153,7 +1157,7 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    if (!is_control_device(parent->info.type)) {
+    if (!device_is_control(parent->info.type)) {
         return ERR_DEVICE_TYPE_MISMATCH;
     }
 
@@ -1165,6 +1169,10 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
     }
 
     memset(&child_msg, 0, sizeof(child_msg));
+    memset(&child_resp, 0, sizeof(child_resp));
+
+    request_id = controller_next_request_id();
+
     child_msg.kind = MSG_REQUEST;
     snprintf(child_msg.sender_id, sizeof(child_msg.sender_id), "%d", CONTROLLER_ID);
     snprintf(child_msg.command, sizeof(child_msg.command), "%s", CMD_LINK);
@@ -1172,16 +1180,32 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
     child_msg.dst_id = child_id;
     child_msg.target_id = child_id;
     child_msg.src_pid = getpid();
-    child_msg.request_id = (int)getpid();
+    child_msg.request_id = request_id;
     snprintf(child_msg.payload, sizeof(child_msg.payload), "parent,%d", parent_id);
 
-    rc = send_message_to_fifo(child->info.fifo_path, &child_msg);
+    rc = make_reply_fifo_path(getpid(), request_id, reply_fifo, sizeof(reply_fifo));
     if (rc != OK) {
         routing_link_devices(child_id, old_parent_id);
         return rc;
     }
 
+    rc = request_reply_timeout(child->info.fifo_path, reply_fifo,
+                               &child_msg, &child_resp, TIMEOUT_DEVICE);
+    if (rc != OK) {
+        routing_link_devices(child_id, old_parent_id);
+        return rc;
+    }
+
+    if (child_resp.status != OK) {
+        routing_link_devices(child_id, old_parent_id);
+        return child_resp.status;
+    }
+
     memset(&parent_msg, 0, sizeof(parent_msg));
+    memset(&parent_resp, 0, sizeof(parent_resp));
+
+    request_id = controller_next_request_id();
+
     parent_msg.kind = MSG_REQUEST;
     snprintf(parent_msg.sender_id, sizeof(parent_msg.sender_id), "%d", CONTROLLER_ID);
     snprintf(parent_msg.command, sizeof(parent_msg.command), "CHILD_ADDED");
@@ -1189,13 +1213,25 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
     parent_msg.dst_id = parent_id;
     parent_msg.target_id = parent_id;
     parent_msg.src_pid = getpid();
-    parent_msg.request_id = (int)child_id;
+    parent_msg.request_id = request_id;
     snprintf(parent_msg.payload, sizeof(parent_msg.payload), "%d", child_id);
 
-    rc = send_message_to_fifo(parent->info.fifo_path, &parent_msg);
+    rc = make_reply_fifo_path(getpid(), request_id, reply_fifo, sizeof(reply_fifo));
     if (rc != OK) {
         routing_link_devices(child_id, old_parent_id);
         return rc;
+    }
+
+    rc = request_reply_timeout(parent->info.fifo_path, reply_fifo,
+                               &parent_msg, &parent_resp, TIMEOUT_DEVICE);
+    if (rc != OK) {
+        routing_link_devices(child_id, old_parent_id);
+        return rc;
+    }
+
+    if (parent_resp.status != OK) {
+        routing_link_devices(child_id, old_parent_id);
+        return parent_resp.status;
     }
 
     child->info.logical_parent_id = parent_id;

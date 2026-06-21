@@ -21,6 +21,8 @@
 #include "device.h"
 #include "cleanup.h"
 
+int controller_delete_device(controller *ctrl, device_id id);
+
 static int ensure_runtime_dirs(void) {
     if (mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
     if (mkdir(FIFO_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
@@ -403,7 +405,7 @@ static int controller_delete_children_cascade(controller *ctrl, device_id parent
             continue;
         }
 
-        rc = controller_send_del_message(child);
+        rc = controller_delete_device(ctrl, child->info.id);
         if (rc != OK &&
             rc != ERR_DEVICE_NOT_FOUND &&
             rc != ERR_IPC_FAILURE) {

@@ -1,0 +1,20 @@
+Domotics controller started.
+Type 'help' for available commands.
+domotics> Added device: id=1 type=hub pid=16337
+domotics> Added device: id=2 type=hub pid=16351
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16337	1	0
+2	hub	16351	1	0
+domotics> Linked device 2 to 1
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16337	1	0
+2	hub	16351	1	1
+domotics> Error: Self link not allowed. A device cannot be linked to itself.
+Input error: Self link not allowed. A device cannot be linked to itself.
+domotics> Error: Cycle detected. Linking these devices would create an invalid loop.
+Input error: Cycle detected. Linking these devices would create an invalid loop.
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16337	1	0
+2	hub	16351	1	1
+domotics> Deleted device: id=2
+Deleted device: id=1

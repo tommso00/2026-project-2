@@ -1,0 +1,23 @@
+Domotics controller started.
+Type 'help' for available commands.
+domotics> Added device: id=1 type=hub pid=16219
+domotics> Added device: id=2 type=bulb pid=16230
+domotics> Added device: id=3 type=window pid=16252
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16219	1	0
+2	bulb	16230	1	0
+3	window	16252	1	0
+domotics> Linked device 2 to 1
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16219	1	0
+2	bulb	16230	1	1
+3	window	16252	1	0
+domotics> Error: The selected devices are not compatible.
+Input error: The selected devices are not compatible.
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16219	1	0
+2	bulb	16230	1	1
+3	window	16252	1	0
+domotics> Deleted device: id=2
+Deleted device: id=1
+Deleted device: id=3

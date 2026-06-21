@@ -1,0 +1,18 @@
+Domotics controller started.
+Type 'help' for available commands.
+domotics> Added device: id=1 type=hub pid=9687
+domotics> Added device: id=2 type=bulb pid=9702
+domotics> Added device: id=3 type=bulb pid=9717
+domotics> Linked device 2 to 1
+domotics> Linked device 3 to 1
+domotics> [pending] switch 1 power on
+domotics> [pending] info 1
+domotics> [pending] info 2
+domotics> hub 1 switched on
+domotics> bulb id=2 state=on manual_override=false time=5
+domotics> hub id=1 state=manual_override error=child_unreachable
+[pending] info 3
+domotics> bulb id=3 state=on manual_override=false time=6
+domotics> Deleted device: id=2
+Deleted device: id=3
+Deleted device: id=1

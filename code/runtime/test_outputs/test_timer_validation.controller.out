@@ -1,0 +1,11 @@
+Domotics controller started.
+Type 'help' for available commands.
+domotics> Added device: id=1 type=timer pid=16686
+domotics> Added device: id=2 type=bulb pid=16697
+domotics> Linked device 2 to 1
+domotics> [pending] info 1
+domotics> timer id=1 state=off begin=00:00 end=00:00
+domotics> [pending] info 1
+domotics> timer id=1 state=off begin=23:00 end=08:00
+domotics> Deleted device: id=2
+Deleted device: id=1

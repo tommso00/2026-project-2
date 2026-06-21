@@ -1,0 +1,9 @@
+add hub
+add bulb
+add window
+list
+link 2 to 1
+list
+link 3 to 2
+list
+exit

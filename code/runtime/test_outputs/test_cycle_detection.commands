@@ -1,0 +1,9 @@
+add hub
+add hub
+list
+link 2 to 1
+list
+link 1 to 1
+link 1 to 2
+list
+exit

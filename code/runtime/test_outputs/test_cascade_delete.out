@@ -1,0 +1,16 @@
+Domotics controller started.
+Type 'help' for available commands.
+domotics> Added device: id=1 type=hub pid=16823
+domotics> Added device: id=2 type=bulb pid=16837
+domotics> Added device: id=3 type=window pid=16856
+domotics> Linked device 2 to 1
+domotics> Linked device 3 to 1
+domotics> ID	TYPE	PID	STATE	PARENT
+1	hub	16823	1	0
+2	bulb	16837	1	1
+3	window	16856	1	1
+domotics> Deleted device: id=2
+Deleted device: id=3
+Deleted device: id=1
+domotics> ID	TYPE	PID	STATE	PARENT
+domotics> 

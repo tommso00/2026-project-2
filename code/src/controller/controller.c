@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <time.h>
+#include <sys/prctl.h>
+#include <linux/prctl.h>
 
 #include "controller.h"
 #include "error_codes.h"
@@ -465,6 +467,14 @@ static int spawn_bulb_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
+
         execl("./bin/domotics_controller",
               "controller",
               "--device-bulb",
@@ -490,6 +500,13 @@ static int spawn_window_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+        
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-window", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -510,6 +527,13 @@ static int spawn_fridge_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+        
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-fridge", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -530,6 +554,13 @@ static int spawn_hub_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+        
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-hub", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -550,6 +581,13 @@ static int spawn_timer_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+        
         execl("./bin/domotics_controller", "controller", "--device-timer", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }

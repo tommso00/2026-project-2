@@ -1,0 +1,111 @@
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+add bulb
+add hub
+info 1
+switch 1 power on
+list
+info 2
+switch 2 power on
+list
+info 3
+switch 3 power on
+list
+info 4
+switch 4 power on
+list
+info 5
+switch 5 power on
+list
+info 6
+switch 6 power on
+list
+info 7
+switch 7 power on
+list
+info 8
+switch 8 power on
+list
+info 9
+switch 9 power on
+list
+info 10
+switch 10 power on
+list
+info 11
+switch 11 power on
+list
+info 12
+switch 12 power on
+list
+info 13
+switch 13 power on
+list
+info 14
+switch 14 power on
+list
+info 15
+switch 15 power on
+list
+info 16
+switch 16 power on
+list
+info 17
+switch 17 power on
+list
+info 18
+switch 18 power on
+list
+info 19
+switch 19 power on
+list
+info 20
+switch 20 power on
+list
+link 1 to 11
+link 2 to 12
+link 3 to 13
+link 4 to 14
+link 5 to 15
+link 6 to 16
+link 7 to 17
+link 8 to 18
+link 9 to 19
+link 10 to 20
+del 1
+del 2
+del 3
+del 4
+del 5
+del 6
+del 7
+del 8
+del 9
+del 10
+del 11
+del 12
+del 13
+del 14
+del 15
+del 16
+del 17
+del 18
+del 19
+del 20
+exit

@@ -239,12 +239,12 @@ static int extract_child_state_from_info(const char *payload, state *out_state)
         return ERR_INVALID_PARAMETERS;
     }
 
-    if (strstr(payload, "state=on") != NULL) {
+    if (strstr(payload, "state=on") != NULL || strstr(payload, "state=open") != NULL) {
         *out_state = STATE_ON;
         return OK;
     }
 
-    if (strstr(payload, "state=off") != NULL) {
+    if (strstr(payload, "state=off") != NULL || strstr(payload, "state=closed") != NULL) {
         *out_state = STATE_OFF;
         return OK;
     }
@@ -334,7 +334,8 @@ static int hub_propagate_to_children(device *dev, const domo_message *req)
         return rc;
     }
 
-    snprintf(payload, sizeof(payload), "%s,%s", label, position);
+    //in pratica costruisce il payload in maniera universale, bypassa le ettichettte specifiche delle varie foglie(in pratica se ne frega se è open oppure power, il controllo si fa dopo)
+    snprintf(payload, sizeof(payload), "sys_state,%s", position);
 
     for (i = 0; i < hub->child_count; ++i) {
         domo_message child_resp;
@@ -342,12 +343,12 @@ static int hub_propagate_to_children(device *dev, const domo_message *req)
         rc = hub_send_command_to_child(hub,
                                        hub->children[i],
                                        CMD_SWITCH,
-                                       label,
+                                       "sys_state",
                                        position,
                                        payload,
                                        &child_resp);
         if (rc != OK) {
-            return rc;
+            continue; // La system call ipc è fallita (può essere boh, pipe rotta o figlio morto che ne so)
         }
 
         if (child_resp.status != OK) {
@@ -551,7 +552,7 @@ static int hub_handle_message(device *dev, const domo_message *req, domo_message
             return OK;
         }
 
-        if (strcmp(label, "power") != 0) {
+        if (strcmp(label, "power") != 0 && strcmp(label, "sys_state") != 0) {
             resp->status = ERR_INVALID_PARAMETERS;
             snprintf(resp->payload, sizeof(resp->payload), "invalid switch label");
             return OK;

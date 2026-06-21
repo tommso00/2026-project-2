@@ -24,18 +24,21 @@ static int handle_stdin_event(controller *ctrl)
 
 static void eventloop_print_async_line(const char *fmt, ...)
 {
-    va_list ap;
+    // va_list ap;
 
     if (fmt == NULL) {
         return;
     }
 
-    fprintf(stderr, "\r");
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fprintf(stderr, "\n");
-    fflush(stderr);
+    // Debug log - commentato per ora 
+    // fprintf(stderr, "\r");
+    // va_start(ap, fmt);
+    // vfprintf(stderr, fmt, ap);
+    // va_end(ap);
+    // fprintf(stderr, "\n");
+    // fflush(stderr);
+    
+    (void)fmt;  // Parameter unused after debug logs commented out
 }
 
 static void eventloop_discard_pending(pending_request *req)

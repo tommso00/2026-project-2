@@ -23,6 +23,7 @@
 #include "device.h"
 #include "cleanup.h"
 
+//end including
 int controller_delete_device(controller *ctrl, device_id id);
 
 static int ensure_runtime_dirs(void) {
@@ -587,7 +588,7 @@ static int spawn_timer_process(device_id id, pid_t *pid_out) {
         if(getppid() ==1){
             _exit(1);
         }
-        
+
         execl("./bin/domotics_controller", "controller", "--device-timer", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -823,6 +824,7 @@ int controller_add_device(controller *controller, device_type type) {
     rc = device_common_init(dev, id, type);
     if (rc != OK) {
         return rc;
+
     }
 
     dev->info.logical_parent_id = CONTROLLER_ID;

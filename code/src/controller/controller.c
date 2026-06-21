@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <time.h>
+#include <sys/prctl.h>
+#include <linux/prctl.h>
 
 #include "controller.h"
 #include "error_codes.h"
@@ -21,6 +23,7 @@
 #include "device.h"
 #include "cleanup.h"
 
+//end including
 int controller_delete_device(controller *ctrl, device_id id);
 
 static int ensure_runtime_dirs(void) {
@@ -198,6 +201,43 @@ Cosa stampa: ID, PID, segnale di terminazione, tipo di dispositivo
         //         "[cleanup] Warning: failed to notify parent %d about dead child %d\n",
         //         parent_id, dead_id);
     }
+
+
+    // addoption of orphan childs
+    for (int i=0; i<ctrl->device_count; i++){
+        if (ctrl->devices[i].info.logical_parent_id == dead_id){
+
+            ctrl->devices[i].info.logical_parent_id = CONTROLLER_ID;
+
+            routing_link_devices(ctrl->devices[i].info.id, CONTROLLER_ID);
+
+            domo_message adopt_msg;
+            memset(&adopt_msg, 0, sizeof(adopt_msg));
+            adopt_msg.kind = MSG_REQUEST;
+            snprintf(adopt_msg.sender_id, sizeof(adopt_msg.sender_id), "%d", CONTROLLER_ID);
+            snprintf(adopt_msg.command, sizeof(adopt_msg.command), "%s", CMD_LINK);
+            adopt_msg.src_id = CONTROLLER_ID;
+            adopt_msg.dst_id = ctrl->devices[i].info.id;
+            adopt_msg.target_id = ctrl->devices[i].info.id;
+            adopt_msg.src_pid =getpid();
+            adopt_msg.request_id = ctrl->devices[i].info.id;
+            snprintf(adopt_msg.payload, sizeof(adopt_msg.payload), "parent,%d", CONTROLLER_ID);
+            
+            send_message_to_fifo(ctrl->devices[i].info.fifo_path, &adopt_msg);
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
 
     rc = routing_remove_node(dead_id);
     if (rc != OK && rc != ERR_DEVICE_NOT_FOUND) {
@@ -428,6 +468,14 @@ static int spawn_bulb_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
+
         execl("./bin/domotics_controller",
               "controller",
               "--device-bulb",
@@ -453,6 +501,13 @@ static int spawn_window_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+        
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-window", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -473,6 +528,13 @@ static int spawn_fridge_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+        
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-fridge", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -493,6 +555,13 @@ static int spawn_hub_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+        
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-hub", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -513,6 +582,13 @@ static int spawn_timer_process(device_id id, pid_t *pid_out) {
     }
 
     if (pid == 0) {
+
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
+        if(getppid() ==1){
+            _exit(1);
+        }
+
         execl("./bin/domotics_controller", "controller", "--device-timer", id_arg, (char *)NULL);
         _exit(ERR_SYSTEM);
     }
@@ -748,6 +824,7 @@ int controller_add_device(controller *controller, device_type type) {
     rc = device_common_init(dev, id, type);
     if (rc != OK) {
         return rc;
+
     }
 
     dev->info.logical_parent_id = CONTROLLER_ID;

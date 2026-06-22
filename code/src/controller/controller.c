@@ -1368,6 +1368,11 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
 	// Update state and save
     child->info.logical_parent_id = parent_id;
 
+    // TEll the old parent that the child was removed
+    if (old_parent_id > 0 && old_parent_id != CONTROLLER_ID){
+        controller_notify_parent_child_removed(controller, child_id, old_parent_id);
+    }
+
     rc = write_registry(controller);
     if (rc != OK) {
         child->info.logical_parent_id = old_parent_id;

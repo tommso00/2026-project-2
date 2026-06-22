@@ -33,43 +33,40 @@ bash scripts/cleanup_ipc.sh >/dev/null 2>&1 || true
 cat > "$CMD_FILE" <<'EOF'
 add hub
 add hub
+add hub
 list
 link 2 to 1
 list
-link 1 to 1
-link 1 to 2
+info 2
+link 3 to 2
 list
+info 3
+link 1 to 1
+list
+info 1
+link 1 to 3
+list
+info 1
 exit
 EOF
 
-./bin/domotics_controller < "$CMD_FILE" > "$OUT_FILE" 2>&1 || true
+CONTROLLER_STATUS=0
+./bin/domotics_controller < "$CMD_FILE" > "$OUT_FILE" 2>&1 || CONTROLLER_STATUS=$?
+[ "$CONTROLLER_STATUS" -eq 0 ] || fail "controller exited with non-zero status: $CONTROLLER_STATUS"
 
 grep -q "Added device: id=1 type=hub" "$OUT_FILE" || fail "first hub not added as expected"
 grep -q "Added device: id=2 type=hub" "$OUT_FILE" || fail "second hub not added as expected"
-
+grep -q "Added device: id=3 type=hub" "$OUT_FILE" || fail "third hub not added as expected"
 grep -q "Linked device 2 to 1" "$OUT_FILE" || fail "valid link 2 -> 1 not reported"
+grep -q "Linked device 3 to 2" "$OUT_FILE" || fail "valid link 3 -> 2 not reported"
+grep -E -q "^2[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$" "$OUT_FILE" || fail "device 2 parent was not updated to 1 after valid link"
+grep -E -q "^3[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+2$" "$OUT_FILE" || fail "device 3 parent was not updated to 2 after valid link"
 
-grep -E -q "^2[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$" "$OUT_FILE" || \
-    fail "device 2 parent was not updated to 1 after valid link"
+grep -q "Error: Self link not allowed. A device cannot be linked to itself." "$OUT_FILE" || fail "missing self-link error message"
+grep -q "Error: Cycle detected. Linking these devices would create an invalid loop." "$OUT_FILE" || fail "missing cycle-detected error message"
 
-if grep -q "Linked device 1 to 1" "$OUT_FILE"; then
-    fail "self-link 1 -> 1 unexpectedly succeeded"
-fi
-
-if grep -q "Linked device 1 to 2" "$OUT_FILE"; then
-    fail "cycle-creating link 1 -> 2 unexpectedly succeeded"
-fi
-
-grep -q "Error: Self link not allowed. A device cannot be linked to itself." "$OUT_FILE" || \
-    fail "missing self-link error message"
-
-grep -q "Error: Cycle detected. Linking these devices would create an invalid loop." "$OUT_FILE" || \
-    fail "missing cycle-detected error message"
-
-grep -E -q "^1[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+0$" "$OUT_FILE" || \
-    fail "device 1 parent changed unexpectedly"
-
-grep -E -q "^2[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$" "$OUT_FILE" || \
-    fail "device 2 parent changed unexpectedly after invalid operations"
+grep -E -q "^1[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+0$" "$OUT_FILE" || fail "device 1 parent changed unexpectedly"
+grep -E -q "^2[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$" "$OUT_FILE" || fail "device 2 parent changed unexpectedly after invalid operations"
+grep -E -q "^3[[:space:]]+hub[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+2$" "$OUT_FILE" || fail "device 3 parent changed unexpectedly after invalid operations"
 
 pass

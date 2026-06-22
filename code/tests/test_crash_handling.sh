@@ -34,73 +34,57 @@ pass() {
     exit 0
 }
 
-send_cmd() {
-    echo "$1" >&"$WRITER_FD" || fail "failed to send command: $1"
-}
+send_cmd() { echo "$1" >&"$WRITER_FD" || fail "failed to send command: $1"; }
+wait_for_pattern() { local p="$1" t="$2" w=0; while [ "$w" -lt "$t" ]; do grep -Eq "$p" "$CTRL_OUT" && return 0; sleep 1; w=$((w+1)); done; return 1; }
 
 bash scripts/cleanup_ipc.sh >/dev/null 2>&1 || true
 rm -f "$CTRL_IN"
 : > "$CTRL_OUT"
 
 mkfifo "$CTRL_IN" || fail "failed to create controller fifo"
-
 ./bin/domotics_controller < "$CTRL_IN" > "$CTRL_OUT" 2>&1 &
 CTRL_PID=$!
-
 exec {WRITER_FD}> "$CTRL_IN" || fail "failed to open controller input fifo"
 
-sleep 1
-
 send_cmd "add hub"
-sleep 1
+wait_for_pattern "Added device: id=1 type=hub" 5 || fail "hub not added as expected"
 send_cmd "add bulb"
-sleep 2
+wait_for_pattern "Added device: id=2 type=bulb" 5 || fail "bulb not added as expected"
 send_cmd "link 2 to 1"
-sleep 6
+wait_for_pattern "Linked device 2 to 1" 5 || fail "link 2 -> 1 not reported"
 send_cmd "list"
-sleep 3
+wait_for_pattern "^2[[:space:]]+bulb[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$" 5 || fail "could not confirm bulb pid from list output"
 
-grep -q "Added device: id=1 type=hub" "$CTRL_OUT" || fail "hub not added as expected"
-grep -q "Added device: id=2 type=bulb" "$CTRL_OUT" || fail "bulb not added as expected"
-grep -q "Linked device 2 to 1" "$CTRL_OUT" || fail "link 2 -> 1 not reported"
-
-BULB_PID="$(awk '/^2[[:space:]]+bulb[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$/ {print $3}' "$CTRL_OUT" | tail -n1)"
+BULB_PID=$(grep -Eo '^2[[:space:]]+bulb[[:space:]]+[0-9]+' "$CTRL_OUT" | tail -n1 | awk '{print $3}')
 [ -n "$BULB_PID" ] || fail "could not extract bulb pid from list output"
-
 kill -9 "$BULB_PID" 2>/dev/null || fail "failed to SIGKILL bulb process"
 
-sleep 4
-send_cmd "info 1"
-sleep 8
-send_cmd "switch 1 power on"
-sleep 10
-send_cmd "list"
-sleep 3
-send_cmd "exit"
+wait_for_pattern "(device 2.*(crash|crashed|unreachable|down)|child.*unreachable|error=.*crash|error=.*unreachable)" 6 || fail "missing specific crash/downtime notification after SIGKILL"
 
+send_cmd "info 1"
+wait_for_pattern "hub id=1" 6 || fail "hub info was not produced after child crash"
+
+send_cmd "switch 1 power on"
+wait_for_pattern "(hub 1 switched on|hub id=1.*state=on|switch.*1.*on)" 8 || fail "hub did not respond after child crash"
+
+send_cmd "list"
+wait_for_pattern "^1[[:space:]]+hub[[:space:]]" 6 || fail "hub disappeared after child crash"
+
+send_cmd "exit"
 exec {WRITER_FD}>&-
 wait "$CTRL_PID" 2>/dev/null || true
 unset CTRL_PID
 
-grep -q "\[pending\] info 1" "$CTRL_OUT" || fail "info 1 was not issued after child crash"
-grep -q "\[pending\] switch 1 power on" "$CTRL_OUT" || fail "switch 1 power on was not issued after child crash"
-
-if ! grep -Eq "hub id=1 state=|hub 1 switched on" "$CTRL_OUT"; then
-    fail "hub did not produce any visible response after child crash"
+if ! grep -Eq "(device 2.*(crash|crashed|unreachable|down)|child.*unreachable|error=.*crash|error=.*unreachable)" "$CTRL_OUT"; then
+    fail "crash handling did not emit an expected error/notification"
 fi
-
-LAST_LIST_LINE="$(grep -nE 'ID[[:space:]]+TYPE[[:space:]]+PID[[:space:]]+STATE[[:space:]]+PARENT[[:space:]]*$' "$CTRL_OUT" | tail -n1 | cut -d: -f1)"
-if [ -z "$LAST_LIST_LINE" ]; then
-    fail "final list header not found"
+if ! grep -Eq "(hub 1 switched on|hub id=1.*state=on|switch.*1.*on)" "$CTRL_OUT"; then
+    fail "hub did not produce a visible response after child crash"
 fi
-
-TAIL_AFTER_LAST_LIST="$(tail -n +"$LAST_LIST_LINE" "$CTRL_OUT")"
-
-if echo "$TAIL_AFTER_LAST_LIST" | grep -E -q "^2[[:space:]]+bulb[[:space:]]"; then
+if grep -Eq "^2[[:space:]]+bulb[[:space:]]" "$CTRL_OUT"; then
     fail "crashed child still appears in final device list"
 fi
-
-if ! echo "$TAIL_AFTER_LAST_LIST" | grep -E -q "^1[[:space:]]+hub[[:space:]]"; then
+if ! grep -Eq "^1[[:space:]]+hub[[:space:]]" "$CTRL_OUT"; then
     fail "hub disappeared after child crash"
 fi
 

@@ -48,11 +48,24 @@ info 4
 link 2 to 4
 list
 info 2
-exit
 EOF
 
 CONTROLLER_STATUS=0
+<<<<<<< HEAD
 ./bin/domotics_controller < "$CMD_FILE" > "$OUT_FILE" 2>&1 || CONTROLLER_STATUS=$?
+=======
+
+# --- FIX DEFINITIVO: Leggiamo riga per riga e aspettiamo 2 secondi tra un comando e l'altro ---
+{
+    while IFS= read -r cmd; do
+        echo "$cmd"
+        sleep 2
+    done < "$CMD_FILE"
+    sleep 5
+    echo "exit"
+} | ./bin/domotics_controller > "$OUT_FILE" 2>&1 || CONTROLLER_STATUS=$?
+
+>>>>>>> ee0d8e0038ada224cf5bb95bd2b18f256d4aa693
 [ "$CONTROLLER_STATUS" -eq 0 ] || fail "controller exited with non-zero status: $CONTROLLER_STATUS"
 
 grep -q "Added device: id=1 type=hub" "$OUT_FILE" || fail "hub 1 not added as expected"

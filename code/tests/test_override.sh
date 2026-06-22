@@ -104,4 +104,20 @@ exec {WRITER_FD}>&-
 wait "$CTRL_PID" 2>/dev/null || true
 unset CTRL_PID
 
+<<<<<<< HEAD
+=======
+grep -q "bulb id=2 parent=1 state=off manual_override=true" "$OUT_FILE" || \
+    fail "bulb 2 did not report manual override OFF state"
+
+MATCH_BULB2_ON="$(grep -c "bulb id=2 parent=1 state=on manual_override=false" "$OUT_FILE" || true)"
+if [ "$MATCH_BULB2_ON" -lt 1 ]; then
+    fail "bulb 2 did not return to ON with manual_override=false"
+fi
+
+MATCH_BULB3_ON="$(grep -c "bulb id=3 parent=1 state=on manual_override=false" "$OUT_FILE" || true)"
+if [ "$MATCH_BULB3_ON" -lt 1 ]; then
+    fail "bulb 3 did not remain coherent during override recovery"
+fi
+
+>>>>>>> ee0d8e0038ada224cf5bb95bd2b18f256d4aa693
 pass

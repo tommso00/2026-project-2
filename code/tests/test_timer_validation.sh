@@ -79,11 +79,16 @@ send_cmd "info 1"
 wait_for_pattern "$CTRL_OUT" "timer id=1 state=.*begin=23:00 end=08:00" 6 || fail "timer did not accept overnight schedule 23:00 -> 08:00"
 grep -q "timer id=1 state=off begin=23:00 end=08:00" "$CTRL_OUT" || fail "timer did not expose valid overnight schedule 23:00 -> 08:00"
 
+<<<<<<< HEAD
 ./bin/manual_client 1 set begin 12:00 >> "$MANUAL_OUT" 2>&1 || true
 ./bin/manual_client 1 set end 11:00 >> "$MANUAL_OUT" 2>&1 || true
 send_cmd "info 1"
 wait_for_pattern "$CTRL_OUT" "timer id=1" 6 || fail "info 1 did not produce timer detail after end before begin"
 ! grep -q "begin=12:00 end=11:00" "$CTRL_OUT" || fail "timer accepted invalid schedule with end before begin"
+=======
+grep -E -q "timer id=1 parent=0 state=(on|off) begin=23:00 end=08:00" "$CTRL_OUT" || \
+    fail "timer did not accept overnight schedule 23:00 -> 08:00"
+>>>>>>> ee0d8e0038ada224cf5bb95bd2b18f256d4aa693
 
 send_cmd "exit"
 exec {WRITER_FD}>&-

@@ -62,11 +62,19 @@ info 4
 link 2 to 4
 list
 info 2
-exit
 EOF
 
 CONTROLLER_STATUS=0
-./bin/domotics_controller < "$CMD_FILE" > "$OUT_FILE" 2>&1 || CONTROLLER_STATUS=$?
+
+# --- FIX DEFINITIVO: Leggiamo riga per riga e aspettiamo 2 secondi tra un comando e l'altro ---
+{
+    while IFS= read -r cmd; do
+        echo "$cmd"
+        sleep 2
+    done < "$CMD_FILE"
+    sleep 5
+    echo "exit"
+} | ./bin/domotics_controller > "$OUT_FILE" 2>&1 || CONTROLLER_STATUS=$?
 
 [ "$CONTROLLER_STATUS" -eq 0 ] || fail "controller exited with non-zero status: $CONTROLLER_STATUS"
 

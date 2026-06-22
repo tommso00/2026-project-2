@@ -86,7 +86,7 @@ sleep 3
 send_cmd "info 1"
 sleep 6
 
-grep -q "timer id=1 state=off begin=23:00 end=08:00" "$CTRL_OUT" || \
+grep -E -q "timer id=1 parent=0 state=(on|off) begin=23:00 end=08:00" "$CTRL_OUT" || \
     fail "timer did not accept overnight schedule 23:00 -> 08:00"
 
 send_cmd "exit"

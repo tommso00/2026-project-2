@@ -255,7 +255,13 @@ static int timer_handle_message(device *dev,const domo_message *req,domo_message
                 snprintf(resp->payload,sizeof(resp->payload),"invalid time format (HH:MM)");
                 return OK;
             }
-            
+            // Protection, begin can't be after end time
+            if(compare_times(req->arg2, timer->end_time) >= 0) {
+                resp->status=ERR_INVALID_PARAMETERS;
+                snprintf(resp->payload,sizeof(resp->payload),"invalid operation: begin time must be before end time");
+                return OK;
+            }
+
             snprintf(timer->begin_time,sizeof(timer->begin_time),"%.5s",req->arg2);
             snprintf(resp->payload,sizeof(resp->payload),"timer %d begin set to %s",timer->base.info.id,timer->begin_time);
             return OK;
@@ -266,6 +272,13 @@ static int timer_handle_message(device *dev,const domo_message *req,domo_message
             if(validate_time_format(req->arg2)!=OK) {
                 resp->status=ERR_INVALID_PARAMETERS;
                 snprintf(resp->payload,sizeof(resp->payload),"invalid time format (HH:MM)");
+                return OK;
+            }
+            
+            // Protection, end can't be before begin
+            if(compare_times(timer->begin_time, req->arg2) >= 0) {
+                resp->status=ERR_INVALID_PARAMETERS;
+                snprintf(resp->payload,sizeof(resp->payload),"invalid operation: end time must be after begin time");
                 return OK;
             }
             
@@ -375,7 +388,7 @@ static int timer_init(device *dev) {
     timer->base.info.state = STATE_OFF;
     timer->base.info.manual_override = false;
     strcpy(timer->begin_time, "00:00");
-    strcpy(timer->end_time, "00:00");
+    strcpy(timer->end_time, "23:59");
 	
 	// Dynamic memory allocation: a timer can only hold 1 child
     timer->base.child_capacity = 1;
@@ -435,15 +448,10 @@ static int timer_update(device *dev){
     bool is_on =false;
 
 	/*	Check if we are inside the ON window.
-		We have to handle two cases: normal day or overnight */
+		We have to handle one cases: normal day or overnight */
     if(compare_times(timer->begin_time, timer->end_time) <0){
     	// Normal case (begin is earlier than end)
-        if (compare_times(current_time_str, timer->begin_time) >= 0 && compare_times(current_time_str, timer->end_time)<0){
-            is_on = true;
-        }
-    }else if (compare_times(timer->begin_time, timer->end_time)>0){
-    	// Overnight case (begin is later than end, crosses midnight)
-        if (compare_times(current_time_str, timer->begin_time)>=0 || compare_times(current_time_str, timer->end_time)<0){
+        if (compare_times(current_time_str, timer->begin_time) >= 0 && compare_times(current_time_str, timer->end_time) < 0){
             is_on = true;
         }
     }

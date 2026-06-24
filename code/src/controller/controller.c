@@ -24,91 +24,91 @@
 #include "cleanup.h"
 
 //end including
-int controller_delete_device(controller *ctrl, device_id id);
+int controller_delete_device ( controller *ctrl, device_id id ) ;
 
-/*	Create required folders for the project. 
-	If they already exist (EEXIST), it's fine, just continue. */
-static int ensure_runtime_dirs(void) {
-    if (mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
-    if (mkdir(FIFO_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
-    if (mkdir(LOG_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
-    if (mkdir(PID_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
-    if (mkdir(REGISTRY_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+/* Create required folders for the project. 
+    If they already exist (EEXIST), it's fine, just continue. */
+static int ensure_runtime_dirs( void ) {
+  if ( mkdir(RUNTIME_DIR, 0777) != 0 && errno != EEXIST ) return ERR_SYSTEM;
+    if( mkdir(FIFO_DIR, 0777) != 0 && errno != EEXIST ) return ERR_SYSTEM;
+      if (mkdir ( LOG_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
+   if ( mkdir(PID_DIR, 0777) != 0 && errno != EEXIST ) return ERR_SYSTEM;
+       if (mkdir(REGISTRY_DIR, 0777) != 0 && errno != EEXIST) return ERR_SYSTEM;
     return OK;
 }
 
-static int controller_count_direct_children(const controller *controller,
-                                            device_id id);
-static int compute_control_timeout(int child_count);
-static int compute_request_timeout(device_type type,
-                                   int child_count);
+static int controller_count_direct_children( const controller *controller ,
+                                            device_id id) ;
+static int compute_control_timeout ( int child_count ) ;
+static int compute_request_timeout( device_type type ,
+                                   int child_count ) ;
 
-static int controller_notify_parent_child_removed(const controller *controller,
-                                                  device_id child_id,
-                                                  int parent_id);
-int write_registry(const controller *ctrl);
-static int controller_find_device_index_by_pid(const controller *ctrl, pid_t pid);
-static void controller_remove_device_fifo(const device *dev);
+static int controller_notify_parent_child_removed( const controller *controller,
+                                                  device_id child_id ,
+                                                  int parent_id );
+int write_registry(const controller *ctrl );
+static int controller_find_device_index_by_pid(const controller *ctrl, pid_t pid );
+static void controller_remove_device_fifo( const device *dev) ;
 
-static int controller_next_request_id(void);
-static pending_request *controller_alloc_pending(controller *ctrl);
-static pending_request *controller_find_pending_by_fd(controller *ctrl, int reply_fd);
-static void controller_clear_pending(pending_request *req);
+static int controller_next_request_id (void);
+static pending_request *controller_alloc_pending( controller *ctrl) ;
+static pending_request *controller_find_pending_by_fd(controller *ctrl, int reply_fd );
+static void controller_clear_pending (pending_request *req );
 
 // Check if the open() error means the FIFO doesn't exist yet
-static int fifo_not_ready_errno(int err)
+static int fifo_not_ready_errno (int err )
 {
     return err == ENOENT || err == ENXIO;
 }
 
-/*	Try to open the device's FIFO. If it's not ready, sleep 1 second and try again.
-	Stop trying after TIMEOUT_DEVICE seconds. */
-static int wait_device_fifo_ready(const char *fifo_path) {
+/* Try to open the device's FIFO. If it's not ready, sleep 1 second and try again.
+    Stop trying after TIMEOUT_DEVICE seconds. */
+static int wait_device_fifo_ready (const char *fifo_path) {
     int retries = TIMEOUT_DEVICE;
 
-    while (retries-- > 0) {
-        int ready_fd = open(fifo_path, O_WRONLY | O_NONBLOCK);
-        if (ready_fd >= 0) {
-            close(ready_fd);
+    while ( retries-- > 0 ) {
+        int ready_fd = open( fifo_path, O_WRONLY | O_NONBLOCK);
+      if (ready_fd >= 0 ) {
+            close (ready_fd);
             return OK;
         }
-        if (!fifo_not_ready_errno(errno)) {
+        if ( !fifo_not_ready_errno(errno) ) {
             return ERR_SYSTEM;
         }
-        sleep(1);
+        sleep (1);
     }
 
     return ERR_TIMEOUT;
 }
 
 // Undo everything if adding a new device fails halfway through
-static void controller_add_rollback(device_id id, pid_t pid, int routing_added) {
-    char fifo_path[PATH_MAX];
+static void controller_add_rollback( device_id id, pid_t pid, int routing_added) {
+    char fifo_path[ PATH_MAX ];
 
-    if (pid > 0) {
-        waitpid(pid, NULL, WNOHANG);
+    if (pid > 0 ) {
+        waitpid( pid, NULL, WNOHANG);
     }
 
-    if (routing_added) {
-        routing_remove_node(id);
+  if (routing_added ) {
+        routing_remove_node( id);
     }
 
-    if (make_device_fifo_path(id, fifo_path, sizeof(fifo_path)) == OK) {
-        unlink(fifo_path);
+    if (make_device_fifo_path( id, fifo_path, sizeof(fifo_path)) == OK ) {
+        unlink (fifo_path);
     }
 }
 
 // Search the devices array and return the index for the given device ID
-static int controller_find_device_index_by_id(const controller *controller, device_id id)
+static int controller_find_device_index_by_id (const controller *controller, device_id id )
 {
     int i;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return -1;
     }
 
-    for (i = 0; i < controller->device_count; ++i) {
-        if (controller->devices[i].info.id == id) {
+  for (i = 0; i < controller->device_count; ++i ) {
+        if (controller->devices[i].info.id == id ) {
             return i;
         }
     }
@@ -117,39 +117,39 @@ static int controller_find_device_index_by_id(const controller *controller, devi
 }
 
 // Remove a device from the array and shift the other elements to fill the gap
-static void controller_remove_device_at_index(controller *controller, int index)
+static void controller_remove_device_at_index (controller *controller, int index )
 {
     int i;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return;
     }
 
-    if (index < 0 || index >= controller->device_count) {
+    if (index < 0 || index >= controller->device_count ) {
         return;
     }
 
-    for (i = index; i < controller->device_count - 1; ++i) {
-        controller->devices[i] = controller->devices[i + 1];
+  for (i = index; i < controller->device_count - 1; ++i ) {
+        controller->devices[ i] = controller->devices[i + 1];
     }
 
     controller->device_count--;
 }
 
 // Delete the physical FIFO file
-static void controller_remove_device_fifo(const device *dev)
+static void controller_remove_device_fifo( const device *dev)
 {
-    if (dev == NULL) {
+    if (dev == NULL ) {
         return;
     }
 
-    if (dev->info.fifo_path[0] != '\0') {
-        unlink(dev->info.fifo_path);
+    if (dev->info.fifo_path[0] != '\0' ) {
+        unlink( dev->info.fifo_path);
     }
 }
 
 // Do some cleanup when a device process crashes or gets killed
-int controller_finalize_dead_device(controller *ctrl, pid_t dead_pid, int status)
+int controller_finalize_dead_device( controller *ctrl, pid_t dead_pid, int status)
 {
     int index;
     device dead_device;
@@ -158,22 +158,22 @@ int controller_finalize_dead_device(controller *ctrl, pid_t dead_pid, int status
     int rc;
     int notify_rc;
 
-    (void)status;  //debug log Parameter unused after debug logs commented out
+    ( void)status;  //debug log Parameter unused after debug logs commented out
 
-    if (ctrl == NULL || dead_pid <= 0) {
+  if (ctrl == NULL || dead_pid <= 0 ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    index = controller_find_device_index_by_pid(ctrl, dead_pid);
-    if (index < 0) {
+    index = controller_find_device_index_by_pid( ctrl, dead_pid);
+    if (index < 0 ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    dead_device = ctrl->devices[index];
+    dead_device = ctrl->devices[ index];
     dead_id = dead_device.info.id;
 
-    rc = routing_get_parent_id(dead_id, &parent_id);
-    if (rc != OK) {
+    rc = routing_get_parent_id( dead_id, &parent_id);
+    if (rc != OK ) {
         parent_id = CONTROLLER_ID;
     }
 
@@ -205,9 +205,9 @@ Cosa stampa: ID, PID, segnale di terminazione, tipo di dispositivo
     // }
 
 
-	// Tell the parent that its child died
-    notify_rc = controller_notify_parent_child_removed(ctrl, dead_id, parent_id);
-    if (notify_rc != OK && notify_rc != ERR_DEVICE_NOT_FOUND) {
+    // Tell the parent that its child died
+    notify_rc = controller_notify_parent_child_removed( ctrl, dead_id, parent_id);
+    if (notify_rc != OK && notify_rc != ERR_DEVICE_NOT_FOUND ) {
         // Debug log - commented out
         // fprintf(stderr,
         //         "[cleanup] Warning: failed to notify parent %d about dead child %d\n",
@@ -217,65 +217,65 @@ Cosa stampa: ID, PID, segnale di terminazione, tipo di dispositivo
 
     // addoption of orphan childs
     // If the dead device was a parent, link its children to the main controller
-    for (int i=0; i<ctrl->device_count; i++){
-        if (ctrl->devices[i].info.logical_parent_id == dead_id){
+    for ( int i=0; i<ctrl->device_count; i++ ){
+      if (ctrl->devices[i].info.logical_parent_id == dead_id ){
 
             ctrl->devices[i].info.logical_parent_id = CONTROLLER_ID;
 
-            routing_link_devices(ctrl->devices[i].info.id, CONTROLLER_ID);
-			
-			// Send a message to the orphan telling him his new parent is the controller
+            routing_link_devices( ctrl->devices[i].info.id, CONTROLLER_ID);
+            
+            // Send a message to the orphan telling him his new parent is the controller
             domo_message adopt_msg;
-            memset(&adopt_msg, 0, sizeof(adopt_msg));
+          memset( &adopt_msg, 0, sizeof(adopt_msg));
             adopt_msg.kind = MSG_REQUEST;
-            snprintf(adopt_msg.sender_id, sizeof(adopt_msg.sender_id), "%d", CONTROLLER_ID);
-            snprintf(adopt_msg.command, sizeof(adopt_msg.command), "%s", CMD_LINK);
+            snprintf( adopt_msg.sender_id, sizeof(adopt_msg.sender_id), "%d", CONTROLLER_ID);
+            snprintf(adopt_msg.command, sizeof(adopt_msg.command), "%s", CMD_LINK );
             adopt_msg.src_id = CONTROLLER_ID;
             adopt_msg.dst_id = ctrl->devices[i].info.id;
             adopt_msg.target_id = ctrl->devices[i].info.id;
-            adopt_msg.src_pid =getpid();
+            adopt_msg.src_pid =getpid( );
             adopt_msg.request_id = ctrl->devices[i].info.id;
-            snprintf(adopt_msg.payload, sizeof(adopt_msg.payload), "parent,%d", CONTROLLER_ID);
+            snprintf( adopt_msg.payload, sizeof(adopt_msg.payload), "parent,%d", CONTROLLER_ID);
             
-            send_message_to_fifo(ctrl->devices[i].info.fifo_path, &adopt_msg);
+            send_message_to_fifo( ctrl->devices[i].info.fifo_path, &adopt_msg);
         }
     }
 
-	
-	  // Remove the dead device completely
-    rc = routing_remove_node(dead_id);
-    if (rc != OK && rc != ERR_DEVICE_NOT_FOUND) {
+    
+      // Remove the dead device completely
+    rc = routing_remove_node( dead_id);
+    if (rc != OK && rc != ERR_DEVICE_NOT_FOUND ) {
         // Debug log - commented out
         // fprintf(stderr, "[cleanup] Warning: failed to remove routing node for %d\n", dead_id);
     }
 
-    controller_remove_device_fifo(&dead_device);
-    controller_remove_device_at_index(ctrl, index);
+    controller_remove_device_fifo( &dead_device);
+    controller_remove_device_at_index( ctrl, index);
 
-	 // Update the text file
-    rc = write_registry(ctrl);
-    if (rc != OK) {
+     // Update the text file
+    rc = write_registry (ctrl);
+    if (rc != OK ) {
         // Debug log - commented out
         // fprintf(stderr, "[cleanup] Failed to update registry\n");
         // fflush(stderr);
         return rc;
     }
 
-    fflush(stderr);
+    fflush (stderr);
     return OK;
 }
 
 // Find device index using its PID
-static int controller_find_device_index_by_pid(const controller *ctrl, pid_t pid)
+static int controller_find_device_index_by_pid( const controller *ctrl, pid_t pid)
 {
     int i;
 
-    if (ctrl == NULL) {
+    if (ctrl == NULL ) {
         return -1;
     }
 
-    for (i = 0; i < ctrl->device_count; ++i) {
-        if (ctrl->devices[i].info.pid == pid) {
+  for (i = 0; i < ctrl->device_count; ++i ) {
+        if (ctrl->devices[i].info.pid == pid ) {
             return i;
         }
     }
@@ -283,58 +283,58 @@ static int controller_find_device_index_by_pid(const controller *ctrl, pid_t pid
     return -1;
 }
 
-/*	Save the list of active devices to a file.
-	We write on a .tmp file first and then rename it, so we don't break the file if it crashes. */
-int write_registry(const controller *controller)
+/* Save the list of active devices to a file.
+    We write on a .tmp file first and then rename it, so we don't break the file if it crashes. */
+int write_registry( const controller *controller)
 {
     FILE *fp;
     int i;
     int rc;
-    char tmp_path[512];
+    char tmp_path [512];
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    rc = ensure_runtime_dirs();
-    if (rc != OK) {
+    rc = ensure_runtime_dirs( );
+    if (rc != OK ) {
         return rc;
     }
 
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", REGISTRY_FILE);
+    snprintf( tmp_path, sizeof(tmp_path), "%s.tmp", REGISTRY_FILE);
 
-    fp = fopen(tmp_path, "w");
-    if (fp == NULL) {
+    fp = fopen (tmp_path, "w");
+    if (fp == NULL ) {
         return ERR_SYSTEM;
     }
 
-    for (i = 0; i < controller->device_count; ++i) {
-        const device *dev = &controller->devices[i];
+    for (i = 0; i < controller->device_count; ++i ) {
+        const device *dev = &controller->devices[ i];
 
-        if (fprintf(fp, "%d %d %s\n",
-                    dev->info.id,
-                    (int)dev->info.pid,
-                    dev->info.fifo_path) < 0) {
-            fclose(fp);
-            unlink(tmp_path);
+      if (fprintf( fp, "%d %d %s\n",
+                  dev->info.id,
+                  (int )dev->info.pid,
+                  dev->info.fifo_path) < 0 ) {
+            fclose (fp);
+            unlink( tmp_path);
             return ERR_SYSTEM;
         }
     }
 
-    if (fflush(fp) != 0) {
-        fclose(fp);
-        unlink(tmp_path);
+    if (fflush(fp) != 0 ) {
+        fclose( fp);
+        unlink( tmp_path);
         return ERR_SYSTEM;
     }
 
-    if (fclose(fp) != 0) {
-        unlink(tmp_path);
+    if (fclose (fp) != 0 ) {
+        unlink( tmp_path);
         return ERR_SYSTEM;
     }
-	
-	// Replace the old file with the new one
-    if (rename(tmp_path, REGISTRY_FILE) != 0) {
-        unlink(tmp_path);
+    
+    // Replace the old file with the new one
+    if (rename( tmp_path, REGISTRY_FILE) != 0 ) {
+        unlink (tmp_path);
         return ERR_SYSTEM;
     }
 
@@ -342,53 +342,53 @@ int write_registry(const controller *controller)
 }
 
 // Send a CMD_DEL message via FIFO to tell the device to terminate
-static int controller_send_del_message(const device *dev) {
+static int controller_send_del_message (const device *dev) {
     domo_message req;
 
-    if (dev == NULL) {
+    if (dev == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    memset(&req, 0, sizeof(req));
+    memset (&req, 0, sizeof(req));
     req.kind = MSG_REQUEST;
-    snprintf(req.sender_id, sizeof(req.sender_id), "%d", CONTROLLER_ID);
-    snprintf(req.command, sizeof(req.command), "%s", CMD_DEL);
+    snprintf( req.sender_id, sizeof(req.sender_id), "%d", CONTROLLER_ID);
+    snprintf( req.command, sizeof(req.command), "%s", CMD_DEL);
     req.target_id = dev->info.id;
     req.src_id = CONTROLLER_ID;
     req.dst_id = dev->info.id;
-    req.src_pid = getpid();
+    req.src_pid = getpid( );
     req.request_id = dev->info.id;
 
-    return send_message_to_fifo(dev->info.fifo_path, &req);
+    return send_message_to_fifo( dev->info.fifo_path, &req);
 }
 
-/*	Wait for the child process to exit. 
-	We use WNOHANG so we don't get stuck here forever. */
-static int controller_wait_device_exit(pid_t pid, int *status_out)
+/* Wait for the child process to exit. 
+    We use WNOHANG so we don't get stuck here forever. */
+static int controller_wait_device_exit( pid_t pid, int *status_out)
 {
     int status = 0;
     int waited = 0;
 
-    if (pid <= 0 || status_out == NULL) {
+  if (pid <= 0 || status_out == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    while (waited < TIMEOUT_DEVICE) {
-        pid_t w = waitpid(pid, &status, WNOHANG);
+    while ( waited < TIMEOUT_DEVICE) {
+        pid_t w = waitpid( pid, &status, WNOHANG);
 
-        if (w == pid) {	// Process is dead
+        if (w == pid ) { // Process is dead
             *status_out = status;
             return OK;
         }
 
-        if (w == 0) {	// Still running, let's wait a bit
-            sleep(1);
+        if (w == 0 ) {   // Still running, let's wait a bit
+            sleep( 1);
             waited++;
             continue;
         }
 
-        if (w < 0) {	// Error
-            if (errno == ECHILD) {
+        if (w < 0 ) {    // Error
+            if (errno == ECHILD ) {
                 *status_out = 0;
                 return OK;
             }
@@ -400,213 +400,213 @@ static int controller_wait_device_exit(pid_t pid, int *status_out)
 }
 
 // Send a message to a parent to let it know a child was removed
-static int controller_notify_parent_child_removed(const controller *controller,
+static int controller_notify_parent_child_removed( const controller *controller,
                                                   device_id child_id,
-                                                  int parent_id)
+                                                  int parent_id )
 {
     const device *parent;
     domo_message msg;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    if (parent_id == CONTROLLER_ID) {
+    if (parent_id == CONTROLLER_ID ) {
         return OK;
     }
 
-    parent = controller_find_device_const(controller, parent_id);
-    if (parent == NULL) {
+    parent = controller_find_device_const( ctrl, parent_id );
+    if (parent == NULL ) {
         return OK;
     }
 
-    memset(&msg, 0, sizeof(msg));
+    memset( &msg, 0, sizeof(msg));
     msg.kind = MSG_REQUEST;
-    snprintf(msg.sender_id, sizeof(msg.sender_id), "%d", CONTROLLER_ID);
-    snprintf(msg.command, sizeof(msg.command), "%s", CMD_CHILD_REMOVED);
+    snprintf (msg.sender_id, sizeof(msg.sender_id), "%d", CONTROLLER_ID);
+    snprintf( msg.command, sizeof(msg.command), "%s", CMD_CHILD_REMOVED);
     msg.target_id = parent_id;
     msg.src_id = CONTROLLER_ID;
     msg.dst_id = parent_id;
-    msg.src_pid = getpid();
-    msg.request_id = (int)child_id;
-    snprintf(msg.payload, sizeof(msg.payload), "%d", child_id);
+    msg.src_pid = getpid ();
+    msg.request_id = (int )child_id;
+    snprintf(msg.payload, sizeof(msg.payload), "%d", child_id );
 
-    (void)send_message_to_fifo(parent->info.fifo_path, &msg);
+    (void)send_message_to_fifo (parent->info.fifo_path, &msg);
     return OK;
 }
 
 // Delete a parent and all its children recursively
-static int controller_delete_children_cascade(controller *ctrl, device_id parent_id)
+static int controller_delete_children_cascade( controller *ctrl, device_id parent_id)
 {
-    device_id children[CONTROLLER_MAX_DEVICES];
+    device_id children[ CONTROLLER_MAX_DEVICES ];
     int count = 0;
     int rc;
     int i;
 
-    if (ctrl == NULL) {
+    if (ctrl == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    rc = routing_collect_children(parent_id, children, CONTROLLER_MAX_DEVICES, &count);
-    if (rc != OK) {
+    rc = routing_collect_children( parent_id, children, CONTROLLER_MAX_DEVICES, &count);
+    if (rc != OK ) {
         return rc;
     }
 
-    for (i = 0; i < count; ++i) {
-        const device *child = controller_find_device_const(ctrl, children[i]);
+  for (i = 0; i < count; ++i ) {
+        const device *child = controller_find_device_const( ctrl, children[i]);
 
-        if (child == NULL) {
+        if (child == NULL ) {
             continue;
         }
 
-        rc = controller_delete_device(ctrl, child->info.id);
+        rc = controller_delete_device (ctrl, child->info.id);
         if (rc != OK &&
             rc != ERR_DEVICE_NOT_FOUND &&
-            rc != ERR_IPC_FAILURE) {
+            rc != ERR_IPC_FAILURE ) {
             return rc;
         }
     }
 
     return OK;
 }
-/*	SPAWN FUNCTIONS
-	These functions use fork() and execl() to start the child processes.
-	They are all basically the same, just the command line argument changes. */
-static int spawn_bulb_process(device_id id, pid_t *pid_out) {
+/* SPAWN FUNCTIONS
+    These functions use fork() and execl() to start the child processes.
+    They are all basically the same, just the command line argument changes. */
+static int spawn_bulb_process (device_id id, pid_t *pid_out) {
     pid_t pid;
-    char id_arg[32];
+    char id_arg [32];
 
-    snprintf(id_arg, sizeof(id_arg), "%d", id);
+    snprintf( id_arg, sizeof(id_arg), "%d", id);
 
-    pid = fork();
-    if (pid < 0) {
+    pid = fork( );
+    if (pid < 0 ) {
         return ERR_SYSTEM;
     }
 
-    if (pid == 0) {
-		// Ask the OS to kill me if my parent (the controller) dies
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
+    if (pid == 0 ) {
+        // Ask the OS to kill me if my parent (the controller) dies
+        prctl( PR_SET_PDEATHSIG, SIGTERM);
 
-        if(getppid() ==1){
-            _exit(1);
+      if(getppid() ==1 ){
+            _exit (1);
         }
 
 
-        execl("./bin/domotics_controller",
+        execl( "./bin/domotics_controller",
               "controller",
               "--device-bulb",
               id_arg,
               (char *)NULL);
-        perror("execl failed");
-        _exit(ERR_SYSTEM);
+        perror ("execl failed");
+        _exit (ERR_SYSTEM);
     }
 
     *pid_out = pid;
     return OK;
 }
 
-static int spawn_window_process(device_id id, pid_t *pid_out) {
+static int spawn_window_process( device_id id, pid_t *pid_out) {
     pid_t pid;
-    char id_arg[32];
+    char id_arg[ 32];
 
-    snprintf(id_arg, sizeof(id_arg), "%d", id);
+    snprintf( id_arg, sizeof(id_arg), "%d", id);
 
-    pid = fork();
-    if (pid < 0) {
+    pid = fork( );
+    if (pid < 0 ) {
         return ERR_SYSTEM;
     }
 
-    if (pid == 0) {
+    if (pid == 0 ) {
         
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        prctl( PR_SET_PDEATHSIG, SIGTERM);
 
-        if(getppid() ==1){
-            _exit(1);
+      if(getppid() ==1 ){
+            _exit (1);
         }
 
-        execl("./bin/domotics_controller", "controller", "--device-window", id_arg, (char *)NULL);
-        _exit(ERR_SYSTEM);
+        execl( "./bin/domotics_controller", "controller", "--device-window", id_arg, (char *)NULL);
+        _exit( ERR_SYSTEM);
     }
 
     *pid_out = pid;
     return OK;
 }
 
-static int spawn_fridge_process(device_id id, pid_t *pid_out) {
+static int spawn_fridge_process( device_id id, pid_t *pid_out) {
     pid_t pid;
-    char id_arg[32];
+    char id_arg[ 32];
 
-    snprintf(id_arg, sizeof(id_arg), "%d", id);
+    snprintf( id_arg, sizeof(id_arg), "%d", id);
 
-    pid = fork();
-    if (pid < 0) {
+    pid = fork ();
+    if (pid < 0 ) {
         return ERR_SYSTEM;
     }
 
-    if (pid == 0) {
+    if (pid == 0 ) {
         
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        prctl( PR_SET_PDEATHSIG, SIGTERM);
 
-        if(getppid() ==1){
-            _exit(1);
+        if(getppid() ==1 ){
+            _exit( 1);
         }
 
-        execl("./bin/domotics_controller", "controller", "--device-fridge", id_arg, (char *)NULL);
-        _exit(ERR_SYSTEM);
+        execl( "./bin/domotics_controller", "controller", "--device-fridge", id_arg, (char *)NULL);
+        _exit (ERR_SYSTEM);
     }
 
     *pid_out = pid;
     return OK;
 }
 
-static int spawn_hub_process(device_id id, pid_t *pid_out) {
+static int spawn_hub_process( device_id id, pid_t *pid_out) {
     pid_t pid;
-    char id_arg[32];
+    char id_arg[ 32];
 
-    snprintf(id_arg, sizeof(id_arg), "%d", id);
+    snprintf( id_arg, sizeof(id_arg), "%d", id);
 
-    pid = fork();
-    if (pid < 0) {
+    pid = fork() ;
+    if (pid < 0 ) {
         return ERR_SYSTEM;
     }
 
-    if (pid == 0) {
+    if (pid == 0 ) {
         
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        prctl (PR_SET_PDEATHSIG, SIGTERM);
 
-        if(getppid() ==1){
-            _exit(1);
+        if(getppid() ==1 ){
+            _exit (1);
         }
 
-        execl("./bin/domotics_controller", "controller", "--device-hub", id_arg, (char *)NULL);
-        _exit(ERR_SYSTEM);
+        execl( "./bin/domotics_controller", "controller", "--device-hub", id_arg, (char *)NULL);
+        _exit( ERR_SYSTEM);
     }
 
     *pid_out = pid;
     return OK;
 }
 
-static int spawn_timer_process(device_id id, pid_t *pid_out) {
+static int spawn_timer_process( device_id id, pid_t *pid_out) {
     pid_t pid;
-    char id_arg[32];
+    char id_arg[ 32];
 
-    snprintf(id_arg, sizeof(id_arg), "%d", id);
+    snprintf( id_arg, sizeof(id_arg), "%d", id);
 
-    pid = fork();
-    if (pid < 0) {
+    pid = fork ();
+    if (pid < 0 ) {
         return ERR_SYSTEM;
     }
 
-    if (pid == 0) {
+    if (pid == 0 ) {
 
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        prctl (PR_SET_PDEATHSIG, SIGTERM);
 
-        if(getppid() ==1){
-            _exit(1);
+        if(getppid() ==1 ){
+            _exit( 1);
         }
 
-        execl("./bin/domotics_controller", "controller", "--device-timer", id_arg, (char *)NULL);
-        _exit(ERR_SYSTEM);
+        execl( "./bin/domotics_controller", "controller", "--device-timer", id_arg, (char *)NULL);
+        _exit (ERR_SYSTEM);
     }
 
     *pid_out = pid;
@@ -614,16 +614,16 @@ static int spawn_timer_process(device_id id, pid_t *pid_out) {
 }
 
 // Get the device pointer using its ID
-device *controller_find_device(controller *controller, device_id id) {
+device *controller_find_device( controller *controller, device_id id) {
     int i;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return NULL;
     }
 
-    for (i = 0; i < controller->device_count; ++i) {
-        if (controller->devices[i].info.pid != 0 && controller->devices[i].info.id == id) {
-            return &controller->devices[i];
+  for (i = 0; i < controller->device_count; ++i ) {
+        if (controller->devices[i].info.pid != 0 && controller->devices[i].info.id == id ) {
+            return &controller->devices[ i];
         }
     }
 
@@ -631,17 +631,17 @@ device *controller_find_device(controller *controller, device_id id) {
 }
 
 // Get the device pointer (read-only)
-const device *controller_find_device_const(const controller *controller, device_id id)
+const device *controller_find_device_const( const controller *controller, device_id id)
 {
     int i;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return NULL;
     }
 
-    for (i = 0; i < controller->device_count; ++i) {
-        if (controller->devices[i].info.pid != 0 && controller->devices[i].info.id == id) {
-            return &controller->devices[i];
+    for (i = 0; i < controller->device_count; ++i ) {
+        if (controller->devices[i].info.pid != 0 && controller->devices[i].info.id == id ) {
+            return &controller->devices[ i];
         }
     }
 
@@ -649,11 +649,11 @@ const device *controller_find_device_const(const controller *controller, device_
 }
 
 // Generate a new request ID
-static int controller_next_request_id(void)
+static int controller_next_request_id (void)
 {
     static int next_id = 1;
 
-    if (next_id <= 0) {
+    if (next_id <= 0 ) {
         next_id = 1;
     }
 
@@ -661,20 +661,20 @@ static int controller_next_request_id(void)
 }
 
 // Find an empty slot in the pending array to save an outgoing request
-static pending_request *controller_alloc_pending(controller *ctrl)
+static pending_request *controller_alloc_pending (controller *ctrl)
 {
     int i;
 
-    if (ctrl == NULL) {
+    if (ctrl == NULL ) {
         return NULL;
     }
 
-    for (i = 0; i < CONTROLLER_MAX_PENDING; ++i) {
-        if (!ctrl->pending[i].in_use) {
-            memset(&ctrl->pending[i], 0, sizeof(ctrl->pending[i]));
+  for (i = 0; i < CONTROLLER_MAX_PENDING; ++i ) {
+        if (!ctrl->pending[i].in_use ) {
+            memset( &ctrl->pending[i], 0, sizeof(ctrl->pending[i]));
             ctrl->pending[i].in_use = 1;
             ctrl->pending[i].reply_fd = -1;
-            return &ctrl->pending[i];
+            return &ctrl->pending[ i];
         }
     }
 
@@ -682,17 +682,17 @@ static pending_request *controller_alloc_pending(controller *ctrl)
 }
 
 // Find a pending request based on the file descriptor of the reply FIFO
-static pending_request *controller_find_pending_by_fd(controller *ctrl, int reply_fd)
+static pending_request *controller_find_pending_by_fd (controller *ctrl, int reply_fd)
 {
     int i;
 
-    if (ctrl == NULL || reply_fd < 0) {
+    if (ctrl == NULL || reply_fd < 0 ) {
         return NULL;
     }
 
-    for (i = 0; i < CONTROLLER_MAX_PENDING; ++i) {
-        if (ctrl->pending[i].in_use && ctrl->pending[i].reply_fd == reply_fd) {
-            return &ctrl->pending[i];
+  for (i = 0; i < CONTROLLER_MAX_PENDING; ++i ) {
+        if (ctrl->pending[i].in_use && ctrl->pending[i].reply_fd == reply_fd ) {
+            return &ctrl->pending[ i];
         }
     }
 
@@ -700,53 +700,53 @@ static pending_request *controller_find_pending_by_fd(controller *ctrl, int repl
 }
 
 // Clean up a pending request structure
-static void controller_clear_pending(pending_request *req)
+static void controller_clear_pending( pending_request *req)
 {
-    if (req == NULL) {
+    if (req == NULL ) {
         return;
     }
 
-    if (req->reply_fd >= 0) {
-        close(req->reply_fd);
+    if (req->reply_fd >= 0 ) {
+        close( req->reply_fd);
     }
 
-    if (req->reply_fifo_path[0] != '\0') {
-        unlink(req->reply_fifo_path);
+    if (req->reply_fifo_path[0] != '\0' ) {
+        unlink( req->reply_fifo_path);
     }
 
-    memset(req, 0, sizeof(*req));
+    memset( req, 0, sizeof(*req));
     req->reply_fd = -1;
 }
 
 // Get all children of a node, put them in an array
-static int controller_collect_subtree(controller *ctrl,
+static int controller_collect_subtree( controller *ctrl,
                                       device_id root_id,
                                       device_id *ids,
                                       int max_ids,
                                       int *count_out)
 {
-    device_id children[CONTROLLER_MAX_DEVICES];
+    device_id children[ CONTROLLER_MAX_DEVICES];
     int child_count = 0;
     int rc;
     int i;
     int total = 0;
 
-    if (ctrl == NULL || ids == NULL || count_out == NULL || max_ids <= 0) {
+  if (ctrl == NULL || ids == NULL || count_out == NULL || max_ids <= 0 ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    ids[total++] = root_id;
+    ids[ total++] = root_id;
 
-    rc = routing_collect_children(root_id, children, CONTROLLER_MAX_DEVICES, &child_count);
-    if (rc != OK) {
+    rc = routing_collect_children( root_id, children, CONTROLLER_MAX_DEVICES, &child_count);
+    if (rc != OK ) {
         return rc;
     }
 
-    for (i = 0; i < child_count; ++i) {
-        if (total >= max_ids) {
+    for (i = 0; i < child_count; ++i ) {
+        if (total >= max_ids ) {
             return ERR_NOT_ALLOWED;
         }
-        ids[total++] = children[i];
+        ids[ total++] = children[i];
     }
 
     *count_out = total;
@@ -754,34 +754,34 @@ static int controller_collect_subtree(controller *ctrl,
 }
 
 // Keep checking until all devices in the subtree are actually removed
-static int controller_wait_subtree_removed(controller *ctrl,
+static int controller_wait_subtree_removed( controller *ctrl,
                                            const device_id *ids,
                                            int count)
 {
     int waited = 0;
 
-    if (ctrl == NULL || ids == NULL || count < 0) {
+    if (ctrl == NULL || ids == NULL || count < 0 ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    while (waited < TIMEOUT_DEVICE + MAX_RANDOM_DELAY_S + 2) {
+    while (waited < TIMEOUT_DEVICE + MAX_RANDOM_DELAY_S + 2 ) {
         int all_gone = 1;
         int i;
 
-        cleanup_reap_terminated_children(ctrl);
+        cleanup_reap_terminated_children( ctrl);
 
-        for (i = 0; i < count; ++i) {
-            if (controller_find_device_index_by_id(ctrl, ids[i]) >= 0) {
+      for (i = 0; i < count; ++i ) {
+            if (controller_find_device_index_by_id( ctrl, ids[i]) >= 0) {
                 all_gone = 0;
                 break;
             }
         }
 
-        if (all_gone) {
+        if (all_gone ) {
             return OK;
         }
 
-        sleep(1);
+        sleep( 1);
         waited++;
     }
 
@@ -789,38 +789,38 @@ static int controller_wait_subtree_removed(controller *ctrl,
 }
 
 // Setup the controller struct at the beginning
-int controller_init(controller *controller)
+int controller_init (controller *controller)
 {
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    memset(controller, 0, sizeof(*controller));
+    memset( controller, 0, sizeof(*controller));
     controller->running = 1;
     controller->next_device_id = 1;
 
-    for (int i = 0; i < CONTROLLER_MAX_PENDING; ++i) {
+    for (int i = 0; i < CONTROLLER_MAX_PENDING; ++i ) {
         controller->pending[i].reply_fd = -1;
     }
 
-    routing_init();
-    return ensure_runtime_dirs();
+    routing_init( );
+    return ensure_runtime_dirs( );
 }
 
-static int controller_count_direct_children(const controller *controller, device_id id)
+static int controller_count_direct_children( const controller *controller, device_id id)
 {
-    device_id children[CONTROLLER_MAX_DEVICES];
+    device_id children[ CONTROLLER_MAX_DEVICES];
     int count = 0;
     int rc;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return 0;
     }
 
-    (void)controller;
+    (void )controller;
 
-    rc = routing_collect_children(id, children, CONTROLLER_MAX_DEVICES, &count);
-    if (rc != OK) {
+    rc = routing_collect_children( id, children, CONTROLLER_MAX_DEVICES, &count);
+    if (rc != OK ) {
         return 0;
     }
 
@@ -828,74 +828,74 @@ static int controller_count_direct_children(const controller *controller, device
 }
 
 // Core function: add a new device
-int controller_add_device(controller *controller, device_type type) {
+int controller_add_device( controller *controller, device_type type) {
     device *dev;
     device_id id;
     pid_t pid = 0;
     int routing_added = 0;
     int rc;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    if (controller->device_count >= CONTROLLER_MAX_DEVICES) {
+    if (controller->device_count >= CONTROLLER_MAX_DEVICES ) {
         return ERR_NOT_ALLOWED;
     }
 
-    dev = &controller->devices[controller->device_count];
-    memset(dev, 0, sizeof(*dev));
+    dev = &controller->devices[ controller->device_count];
+    memset( dev, 0, sizeof(*dev));
 
     id = controller->next_device_id++;
-    rc = device_common_init(dev, id, type);
-    if (rc != OK) {
+    rc = device_common_init( dev, id, type);
+    if (rc != OK ) {
         return rc;
 
     }
 
     dev->info.logical_parent_id = CONTROLLER_ID;
 
-	// Fork based on device type
-    switch (type) {
+    // Fork based on device type
+    switch (type ) {
         case DEVICE_BULB:
-            rc = spawn_bulb_process(dev->info.id, &pid);
+            rc = spawn_bulb_process( dev->info.id, &pid);
             break;
         case DEVICE_WINDOW:
-            rc = spawn_window_process(dev->info.id, &pid);
+            rc = spawn_window_process( dev->info.id, &pid);
             break;
         case DEVICE_FRIDGE:
-            rc = spawn_fridge_process(dev->info.id, &pid);
+            rc = spawn_fridge_process( dev->info.id, &pid);
             break;
         case DEVICE_HUB:
-            rc = spawn_hub_process(dev->info.id, &pid);
+            rc = spawn_hub_process( dev->info.id, &pid);
             break;
         case DEVICE_TIMER:
-            rc = spawn_timer_process(dev->info.id, &pid);
+            rc = spawn_timer_process( dev->info.id, &pid);
             break;
         default:
             return ERR_DEVICE_TYPE_MISMATCH;
     }
 
-    if (rc != OK) {
+    if (rc != OK ) {
         return rc;
     }
 
     dev->info.pid = pid;
-	
-	// Wait for child FIFO
-    rc = wait_device_fifo_ready(dev->info.fifo_path);
-    if (rc != OK) {
-        controller_add_rollback(id, pid, routing_added);
-        memset(dev, 0, sizeof(*dev));
+    
+    // Wait for child FIFO
+    rc = wait_device_fifo_ready( dev->info.fifo_path);
+    if (rc != OK ) {
+        controller_add_rollback( id, pid, routing_added);
+        memset( dev, 0, sizeof(*dev));
         dev->info.pid = 0;
         return rc;
     }
 
-	// Add to routing table
-    rc = routing_add_node(id, type);
-    if (rc != OK) {
-        controller_add_rollback(id, pid, routing_added);
-        memset(dev, 0, sizeof(*dev));
+    // Add to routing table
+    rc = routing_add_node( id, type);
+    if (rc != OK ) {
+        controller_add_rollback( id, pid, routing_added);
+        memset( dev, 0, sizeof(*dev));
         dev->info.pid = 0;
         return rc;
     }
@@ -903,104 +903,104 @@ int controller_add_device(controller *controller, device_type type) {
 
     controller->device_count++;
 
-	// Write to file
-    rc = write_registry(controller);
-    if (rc != OK) {
+    // Write to file
+    rc = write_registry( controller);
+    if (rc != OK ) {
         controller->device_count--;
-        controller_add_rollback(id, pid, routing_added);
-        memset(dev, 0, sizeof(*dev));
+        controller_add_rollback( id, pid, routing_added);
+        memset (dev, 0, sizeof(*dev));
         return rc;
     }
 
-    printf("Added device: id=%d type=%s pid=%d\n",
+    printf( "Added device: id=%d type=%s pid=%d\n",
            dev->info.id, device_type_str(dev->info.type), (int)dev->info.pid);
 
     return OK;
 }
 
 // Core function: delete a device
-int controller_delete_device(controller *ctrl, device_id id)
+int controller_delete_device (controller *ctrl, device_id id)
 {
     device *dev;
     pid_t pid;
     int status = 0;
     int rc;
-    device_id subtree_ids[CONTROLLER_MAX_DEVICES];
+    device_id subtree_ids[ CONTROLLER_MAX_DEVICES];
     int subtree_count = 0;
 
-    if (ctrl == NULL) {
+    if (ctrl == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    dev = controller_find_device(ctrl, id);
-    if (dev == NULL) {
+    dev = controller_find_device( ctrl, id);
+    if (dev == NULL ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    rc = controller_collect_subtree(ctrl, id,
+    rc = controller_collect_subtree( ctrl, id,
                                     subtree_ids,
                                     CONTROLLER_MAX_DEVICES,
                                     &subtree_count);
-    if (rc != OK) {
+    if (rc != OK ) {
         return rc;
     }
-	
-	// If it's a Hub or Timer, delete its children too
-    if (device_is_control(dev->info.type)) {
-        rc = controller_delete_children_cascade(ctrl, id);
-        if (rc != OK) {
+    
+    // If it's a Hub or Timer, delete its children too
+    if (device_is_control(dev->info.type) ) {
+        rc = controller_delete_children_cascade( ctrl, id);
+        if (rc != OK ) {
             return rc;
         }
     }
 
     pid = dev->info.pid;
 
-	// Tell it to kill itself via FIFO
-    rc = controller_send_del_message(dev);
-    if (rc != OK) {
+    // Tell it to kill itself via FIFO
+    rc = controller_send_del_message (dev);
+    if (rc != OK ) {
         return rc;
     }
 
-	// Wait for the OS to kill the process
-    rc = controller_wait_device_exit(pid, &status);
-    if (rc != OK) {
+    // Wait for the OS to kill the process
+    rc = controller_wait_device_exit( pid, &status);
+    if (rc != OK ) {
         return rc;
     }
 
-	// Cleanup internal arrays
-    if (controller_find_device_index_by_id(ctrl, id) >= 0) {
-        rc = controller_finalize_dead_device(ctrl, pid, status);
-        if (rc != OK && rc != ERR_DEVICE_NOT_FOUND) {
+    // Cleanup internal arrays
+  if (controller_find_device_index_by_id( ctrl, id) >= 0) {
+        rc = controller_finalize_dead_device( ctrl, pid, status);
+        if (rc != OK && rc != ERR_DEVICE_NOT_FOUND ) {
             return rc;
         }
     }
-	
-	// Wait until everything is fully removed
-    rc = controller_wait_subtree_removed(ctrl, subtree_ids, subtree_count);
-    if (rc != OK) {
+    
+    // Wait until everything is fully removed
+    rc = controller_wait_subtree_removed( ctrl, subtree_ids, subtree_count);
+    if (rc != OK ) {
         return rc;
     }
 
-    printf("Deleted device: id=%d\n", id);
+    printf( "Deleted device: id=%d\n", id);
     return OK;
 }
 
 // Print all devices
-int controller_list_devices(controller *controller) {
+int controller_list_devices( controller *controller) {
     int i;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    printf("ID\tTYPE\tPID\tSTATE\tPARENT\n");
-    for (i = 0; i < controller->device_count; ++i) {
-        device *dev = &controller->devices[i];
-        if (dev->info.pid == 0) {
+    printf( "ID\tTYPE\tPID\tSTATE\tPARENT\n");
+    for (i = 0; i < controller->device_count; ++i ) {
+        device *dev = &controller->devices[ i];
+        if (dev->info.pid == 0 ) {
             continue;
         }
 
-        printf("%d\t%s\t%d\t%d\t%d\n",
+        printf( "%d\t%s\t%d\t%d\t%d\n",
                dev->info.id,
                device_type_str(dev->info.type),
                (int)dev->info.pid,
@@ -1012,7 +1012,7 @@ int controller_list_devices(controller *controller) {
 }
 
 // Send an info request to a device and setup a temporary FIFO for the reply
-int controller_info_device(controller *controller, device_id id)
+int controller_info_device( controller *controller, device_id id)
 {
     const device *dev;
     domo_message req;
@@ -1021,74 +1021,74 @@ int controller_info_device(controller *controller, device_id id)
     int target_child_count;
     int timeout_sec;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    dev = controller_find_device_const(controller, id);
-    if (dev == NULL) {
+    dev = controller_find_device_const( controller, id);
+    if (dev == NULL ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    pend = controller_alloc_pending(controller);
-    if (pend == NULL) {
+    pend = controller_alloc_pending( controller);
+    if (pend == NULL ) {
         return ERR_NOT_ALLOWED;
     }
 
-	// Setup the reply FIFO
-    pend->request_id = controller_next_request_id();
-    rc = make_reply_fifo_path(getpid(), pend->request_id,
+    // Setup the reply FIFO
+    pend->request_id = controller_next_request_id( );
+    rc = make_reply_fifo_path( getpid(), pend->request_id,
                               pend->reply_fifo_path, sizeof(pend->reply_fifo_path));
-    if (rc != OK) {
-        controller_clear_pending(pend);
+    if (rc != OK ) {
+        controller_clear_pending (pend);
         return rc;
     }
 
-    unlink(pend->reply_fifo_path);
-    if (mkfifo(pend->reply_fifo_path, 0666) != 0 && errno != EEXIST) {
-        controller_clear_pending(pend);
+    unlink (pend->reply_fifo_path);
+    if (mkfifo( pend->reply_fifo_path, 0666) != 0 && errno != EEXIST) {
+        controller_clear_pending( pend);
         return ERR_SYSTEM;
     }
 
-    pend->reply_fd = open(pend->reply_fifo_path, O_RDONLY | O_NONBLOCK);
-    if (pend->reply_fd < 0) {
-        controller_clear_pending(pend);
+    pend->reply_fd = open( pend->reply_fifo_path, O_RDONLY | O_NONBLOCK);
+    if (pend->reply_fd < 0 ) {
+        controller_clear_pending (pend);
         return ERR_SYSTEM;
     }
 
-    target_child_count = controller_count_direct_children(controller, id);
-    timeout_sec = compute_request_timeout(dev->info.type, target_child_count);
+    target_child_count = controller_count_direct_children( controller, id);
+    timeout_sec = compute_request_timeout (dev->info.type, target_child_count);
 
-	// Prepare the message struct
-    memset(&req, 0, sizeof(req));
+    // Prepare the message struct
+    memset( &req, 0, sizeof(req));
     req.kind = MSG_REQUEST;
-    snprintf(req.command, sizeof(req.command), "%s", CMD_INFO);
-    snprintf(req.sender_id, sizeof(req.sender_id), "%d", CONTROLLER_ID);
+    snprintf( req.command, sizeof(req.command), "%s", CMD_INFO);
+    snprintf( req.sender_id, sizeof(req.sender_id), "%d", CONTROLLER_ID);
     req.src_id = CONTROLLER_ID;
     req.dst_id = id;
     req.target_id = id;
-    req.src_pid = getpid();
+    req.src_pid = getpid( );
     req.request_id = pend->request_id;
-    snprintf(req.payload, sizeof(req.payload), "ALL");
+    snprintf (req.payload, sizeof(req.payload), "ALL");
 
     pend->kind = CTRL_REQ_INFO;
     pend->target_id = id;
     pend->target_type = dev->info.type;
-    pend->deadline = time(NULL) + timeout_sec;
+    pend->deadline = time( NULL) + timeout_sec;
 
-    rc = send_message_to_fifo(dev->info.fifo_path, &req);
-    if (rc != OK) {
-        controller_clear_pending(pend);
+    rc = send_message_to_fifo( dev->info.fifo_path, &req);
+    if (rc != OK ) {
+        controller_clear_pending( pend);
         return rc;
     }
 
-    printf("[pending] info %d\n", id);
+    printf( "[pending] info %d\n", id);
     return OK;
 }
 
-/*	Send a switch request to change device state.
-	similar to controller_info_device.*/ 
-int controller_switch_device(controller *controller, device_id id, const char *label, const char *pos)
+/* Send a switch request to change device state.
+    similar to controller_info_device.*/ 
+int controller_switch_device( controller *controller, device_id id, const char *label, const char *pos)
 {
     const device *dev;
     domo_message req;
@@ -1097,161 +1097,161 @@ int controller_switch_device(controller *controller, device_id id, const char *l
     int timeout_sec;
     int target_child_count;
 
-    if (controller == NULL || label == NULL || pos == NULL) {
+    if (controller == NULL || label == NULL || pos == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    dev = controller_find_device_const(controller, id);
-    if (dev == NULL) {
+    dev = controller_find_device_const( controller, id);
+    if (dev == NULL ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    pend = controller_alloc_pending(controller);
-    if (pend == NULL) {
+    pend = controller_alloc_pending (controller);
+    if (pend == NULL ) {
         return ERR_NOT_ALLOWED;
     }
 
-    pend->request_id = controller_next_request_id();
-    rc = make_reply_fifo_path(getpid(), pend->request_id,
+    pend->request_id = controller_next_request_id ();
+    rc = make_reply_fifo_path (getpid(), pend->request_id,
                               pend->reply_fifo_path, sizeof(pend->reply_fifo_path));
-    if (rc != OK) {
-        controller_clear_pending(pend);
+    if (rc != OK ) {
+        controller_clear_pending (pend);
         return rc;
     }
 
-    unlink(pend->reply_fifo_path);
-    if (mkfifo(pend->reply_fifo_path, 0666) != 0 && errno != EEXIST) {
-        controller_clear_pending(pend);
+    unlink( pend->reply_fifo_path);
+    if (mkfifo( pend->reply_fifo_path, 0666) != 0 && errno != EEXIST) {
+        controller_clear_pending( pend);
         return ERR_SYSTEM;
     }
 
-    pend->reply_fd = open(pend->reply_fifo_path, O_RDONLY | O_NONBLOCK);
-    if (pend->reply_fd < 0) {
-        controller_clear_pending(pend);
+    pend->reply_fd = open( pend->reply_fifo_path, O_RDONLY | O_NONBLOCK);
+    if (pend->reply_fd < 0 ) {
+        controller_clear_pending( pend);
         return ERR_SYSTEM;
     }
 
-    target_child_count = controller_count_direct_children(controller, id);
-    timeout_sec = compute_request_timeout(dev->info.type, target_child_count);
+    target_child_count = controller_count_direct_children( controller, id);
+    timeout_sec = compute_request_timeout( dev->info.type, target_child_count);
 
-    memset(&req, 0, sizeof(req));
+    memset( &req, 0, sizeof(req));
     req.kind = MSG_REQUEST;
-    snprintf(req.command, sizeof(req.command), "%s", CMD_SWITCH);
-    snprintf(req.sender_id, sizeof(req.sender_id), "%d", CONTROLLER_ID);
+    snprintf( req.command, sizeof(req.command), "%s", CMD_SWITCH);
+    snprintf( req.sender_id, sizeof(req.sender_id), "%d", CONTROLLER_ID);
     req.src_id = CONTROLLER_ID;
     req.dst_id = id;
     req.target_id = id;
-    req.src_pid = getpid();
+    req.src_pid = getpid( );
     req.request_id = pend->request_id;
-    snprintf(req.arg1, sizeof(req.arg1), "%s", label);
-    snprintf(req.arg2, sizeof(req.arg2), "%s", pos);
-    snprintf(req.payload, sizeof(req.payload), "%s,%s", label, pos);
+    snprintf( req.arg1, sizeof(req.arg1), "%s", label);
+    snprintf( req.arg2, sizeof(req.arg2), "%s", pos);
+    snprintf( req.payload, sizeof(req.payload), "%s,%s", label, pos);
 
     pend->kind = CTRL_REQ_SWITCH;
     pend->target_id = id;
     pend->target_type = dev->info.type;
-    pend->deadline = time(NULL) + timeout_sec;
-    snprintf(pend->extra1, sizeof(pend->extra1), "%s", label);
-    snprintf(pend->extra2, sizeof(pend->extra2), "%s", pos);
+    pend->deadline = time( NULL) + timeout_sec;
+    snprintf( pend->extra1, sizeof(pend->extra1), "%s", label);
+    snprintf( pend->extra2, sizeof(pend->extra2), "%s", pos);
 
-    rc = send_message_to_fifo(dev->info.fifo_path, &req);
-    if (rc != OK) {
-        controller_clear_pending(pend);
+    rc = send_message_to_fifo( dev->info.fifo_path, &req);
+    if (rc != OK ) {
+        controller_clear_pending( pend);
         return rc;
     }
 
-    printf("[pending] switch %d %s %s\n", id, label, pos);
+    printf( "[pending] switch %d %s %s\n", id, label, pos);
     return OK;
 }
 
 // Function called when the reply FIFO has data. Read the reply and print it.
-int controller_complete_pending_fd(controller *ctrl, int reply_fd)
+int controller_complete_pending_fd (controller *ctrl, int reply_fd)
 {
     pending_request *pend;
     domo_message msg;
     int rc;
 
-    if (ctrl == NULL || reply_fd < 0) {
+    if (ctrl == NULL || reply_fd < 0 ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    pend = controller_find_pending_by_fd(ctrl, reply_fd);
-    if (pend == NULL) {
+    pend = controller_find_pending_by_fd( ctrl, reply_fd);
+    if (pend == NULL ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    memset(&msg, 0, sizeof(msg));
-    rc = ipc_recv_message(reply_fd, &msg);
-    if (rc != OK) {
+    memset( &msg, 0, sizeof(msg));
+    rc = ipc_recv_message( reply_fd, &msg);
+    if (rc != OK ) {
         return rc;
     }
 
-    if (pend->kind == CTRL_REQ_INFO) {
-        if (msg.status != OK) {
-            if (device_is_control(pend->target_type)) {
-                printf("%s id=%d state=manual_override error=consistency_check_failed\n",
+    if (pend->kind == CTRL_REQ_INFO ) {
+      if (msg.status != OK ) {
+            if (device_is_control(pend->target_type) ) {
+                printf( "%s id=%d state=manual_override error=consistency_check_failed\n",
                        device_type_str(pend->target_type),
                        pend->target_id);
             } else {
-                printf("info %d failed: %s\n",
+                printf( "info %d failed: %s\n",
                        pend->target_id,
                        error_str(msg.status));
             }
         } else {
-            printf("%s\n", msg.payload);
+            printf( "%s\n", msg.payload);
         }
-    } else if (pend->kind == CTRL_REQ_SWITCH) {
-        if (msg.status != OK) {
-            printf("switch %d failed: %s\n",
+    } else if (pend->kind == CTRL_REQ_SWITCH ) {
+        if (msg.status != OK ) {
+            printf( "switch %d failed: %s\n",
                    pend->target_id,
                    error_str(msg.status));
         } else {
-            printf("%s\n", msg.payload[0] ? msg.payload : "switch ok");
+            printf( "%s\n", msg.payload[0] ? msg.payload : "switch ok");
         }
     } else {
-        controller_clear_pending(pend);
+        controller_clear_pending( pend);
         return ERR_INVALID_PARAMETERS;
     }
 
-    controller_clear_pending(pend);	// Free the slot
+    controller_clear_pending( pend); // Free the slot
     return OK;
 }
 
 // Check if any pending request has timed out
-int controller_expire_pending(controller *ctrl)
+int controller_expire_pending( controller *ctrl)
 {
     int i;
     time_t now;
 
-    if (ctrl == NULL) {
+    if (ctrl == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    now = time(NULL);
+    now = time( NULL);
 
-    for (i = 0; i < CONTROLLER_MAX_PENDING; ++i) {
-        pending_request *pend = &ctrl->pending[i];
+  for (i = 0; i < CONTROLLER_MAX_PENDING; ++i ) {
+        pending_request *pend = &ctrl->pending[ i];
 
-        if (!pend->in_use) {
+        if (!pend->in_use ) {
             continue;
         }
 
-        if (pend->deadline <= now) {
-            if (pend->kind == CTRL_REQ_INFO && device_is_control(pend->target_type)) {
-                printf("%s id=%d state=manual_override error=child_unreachable\n",
+        if (pend->deadline <= now ) {
+            if (pend->kind == CTRL_REQ_INFO && device_is_control(pend->target_type) ) {
+                printf( "%s id=%d state=manual_override error=child_unreachable\n",
                        device_type_str(pend->target_type),
                        pend->target_id);
-            } else if (pend->kind == CTRL_REQ_INFO) {
-                printf("info %d failed: %s\n",
+            } else if (pend->kind == CTRL_REQ_INFO ) {
+                printf( "info %d failed: %s\n",
                        pend->target_id,
                        error_str(ERR_TIMEOUT));
-            } else if (pend->kind == CTRL_REQ_SWITCH) {
-                printf("switch %d failed: %s\n",
+            } else if (pend->kind == CTRL_REQ_SWITCH ) {
+                printf( "switch %d failed: %s\n",
                        pend->target_id,
                        error_str(ERR_TIMEOUT));
             }
 
-            controller_clear_pending(pend);
+            controller_clear_pending( pend);
         }
     }
 
@@ -1259,7 +1259,7 @@ int controller_expire_pending(controller *ctrl)
 }
 
 // Link a device to a parent (e.g. link bulb to a hub)
-int controller_link_devices(controller *controller, device_id child_id, device_id parent_id)
+int controller_link_devices( controller *controller, device_id child_id, device_id parent_id)
 {
     device *child;
     const device *parent;
@@ -1267,150 +1267,150 @@ int controller_link_devices(controller *controller, device_id child_id, device_i
     domo_message parent_msg;
     domo_message child_resp;
     domo_message parent_resp;
-    char reply_fifo[PATH_MAX];
+    char reply_fifo[ PATH_MAX];
     int rc;
     int old_parent_id;
     int request_id;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    child = controller_find_device(controller, child_id);
-    if (child == NULL) {
+    child = controller_find_device( controller, child_id);
+    if (child == NULL ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    parent = controller_find_device_const(controller, parent_id);
-    if (parent == NULL) {
+    parent = controller_find_device_const( controller, parent_id);
+    if (parent == NULL ) {
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    if (!device_is_control(parent->info.type)) {
+    if (!device_is_control(parent->info.type) ) {
         return ERR_DEVICE_TYPE_MISMATCH;
     }
 
     old_parent_id = child->info.logical_parent_id;
 
-    rc = routing_link_devices(child_id, parent_id);
-    if (rc != OK) {
+    rc = routing_link_devices( child_id, parent_id);
+    if (rc != OK ) {
         return rc;
     }
-	
-	//1: Tell the child it has a new parent
-    memset(&child_msg, 0, sizeof(child_msg));
-    memset(&child_resp, 0, sizeof(child_resp));
+    
+    //1: Tell the child it has a new parent
+    memset( &child_msg, 0, sizeof(child_msg));
+    memset( &child_resp, 0, sizeof(child_resp));
 
-    request_id = controller_next_request_id();
+    request_id = controller_next_request_id( );
 
     child_msg.kind = MSG_REQUEST;
-    snprintf(child_msg.sender_id, sizeof(child_msg.sender_id), "%d", CONTROLLER_ID);
-    snprintf(child_msg.command, sizeof(child_msg.command), "%s", CMD_LINK);
+    snprintf( child_msg.sender_id, sizeof(child_msg.sender_id), "%d", CONTROLLER_ID);
+    snprintf( child_msg.command, sizeof(child_msg.command), "%s", CMD_LINK);
     child_msg.src_id = CONTROLLER_ID;
     child_msg.dst_id = child_id;
     child_msg.target_id = child_id;
-    child_msg.src_pid = getpid();
+    child_msg.src_pid = getpid( );
     child_msg.request_id = request_id;
-    snprintf(child_msg.payload, sizeof(child_msg.payload), "parent,%d", parent_id);
+    snprintf( child_msg.payload, sizeof(child_msg.payload), "parent,%d", parent_id);
 
-    rc = make_reply_fifo_path(getpid(), request_id, reply_fifo, sizeof(reply_fifo));
-    if (rc != OK) {
-        routing_link_devices(child_id, old_parent_id);
+    rc = make_reply_fifo_path( getpid(), request_id, reply_fifo, sizeof(reply_fifo));
+    if (rc != OK ) {
+        routing_link_devices( child_id, old_parent_id);
         return rc;
     }
 
-    rc = request_reply_timeout(child->info.fifo_path, reply_fifo,
+    rc = request_reply_timeout( child->info.fifo_path, reply_fifo,
                                &child_msg, &child_resp, TIMEOUT_DEVICE);
-    if (rc != OK) {
-        routing_link_devices(child_id, old_parent_id);
+    if (rc != OK ) {
+        routing_link_devices( child_id, old_parent_id);
         return rc;
     }
 
-    if (child_resp.status != OK) {
-        routing_link_devices(child_id, old_parent_id);
+    if (child_resp.status != OK ) {
+        routing_link_devices( child_id, old_parent_id);
         return child_resp.status;
     }
-	
-	//2: Tell the parent it has a new child
-    memset(&parent_msg, 0, sizeof(parent_msg));
-    memset(&parent_resp, 0, sizeof(parent_resp));
+    
+    //2: Tell the parent it has a new child
+    memset( &parent_msg, 0, sizeof(parent_msg));
+    memset( &parent_resp, 0, sizeof(parent_resp));
 
-    request_id = controller_next_request_id();
+    request_id = controller_next_request_id( );
 
     parent_msg.kind = MSG_REQUEST;
-    snprintf(parent_msg.sender_id, sizeof(parent_msg.sender_id), "%d", CONTROLLER_ID);
-    snprintf(parent_msg.command, sizeof(parent_msg.command), "%s", CMD_CHILD_ADDED);
+    snprintf( parent_msg.sender_id, sizeof(parent_msg.sender_id), "%d", CONTROLLER_ID);
+    snprintf( parent_msg.command, sizeof(parent_msg.command), "%s", CMD_CHILD_ADDED);
     parent_msg.src_id = CONTROLLER_ID;
     parent_msg.dst_id = parent_id;
     parent_msg.target_id = parent_id;
-    parent_msg.src_pid = getpid();
+    parent_msg.src_pid = getpid( );
     parent_msg.request_id = request_id;
-    snprintf(parent_msg.payload, sizeof(parent_msg.payload), "%d", child_id);
+    snprintf( parent_msg.payload, sizeof(parent_msg.payload), "%d", child_id);
 
-    rc = make_reply_fifo_path(getpid(), request_id, reply_fifo, sizeof(reply_fifo));
-    if (rc != OK) {
-        routing_link_devices(child_id, old_parent_id);
+    rc = make_reply_fifo_path( getpid(), request_id, reply_fifo, sizeof(reply_fifo));
+    if (rc != OK ) {
+        routing_link_devices( child_id, old_parent_id);
         return rc;
     }
 
-    rc = request_reply_timeout(parent->info.fifo_path, reply_fifo,
+    rc = request_reply_timeout( parent->info.fifo_path, reply_fifo,
                                &parent_msg, &parent_resp, TIMEOUT_DEVICE);
-    if (rc != OK) {
-        routing_link_devices(child_id, old_parent_id);
+    if (rc != OK ) {
+        routing_link_devices( child_id, old_parent_id);
         return rc;
     }
 
-    if (parent_resp.status != OK) {
-        routing_link_devices(child_id, old_parent_id);
+    if (parent_resp.status != OK ) {
+        routing_link_devices( child_id, old_parent_id);
         return parent_resp.status;
     }
 
-	// Update state and save
+    // Update state and save
     child->info.logical_parent_id = parent_id;
 
     // TEll the old parent that the child was removed
-    if (old_parent_id > 0 && old_parent_id != CONTROLLER_ID){
-        controller_notify_parent_child_removed(controller, child_id, old_parent_id);
+    if (old_parent_id > 0 && old_parent_id != CONTROLLER_ID ){
+        controller_notify_parent_child_removed( controller, child_id, old_parent_id);
     }
 
-    rc = write_registry(controller);
-    if (rc != OK) {
+    rc = write_registry( controller);
+    if (rc != OK ) {
         child->info.logical_parent_id = old_parent_id;
-        routing_link_devices(child_id, old_parent_id);
+        routing_link_devices( child_id, old_parent_id);
         return rc;
     }
 
-    printf("Linked device %d to %d\n", child_id, parent_id);
+    printf( "Linked device %d to %d\n", child_id, parent_id);
     return OK;
 }
 
 // Kill all processes when shutting down
-int controller_destroy(controller *controller)
+int controller_destroy (controller *controller)
 {
     int changed;
     int rc;
 
-    if (controller == NULL) {
+    if (controller == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
     do {
         changed = 0;
-        for (int i = 0; i < controller->device_count; ++i) {
-            device *dev = &controller->devices[i];
-            if (dev->info.pid != 0) {
-                rc = controller_delete_device(controller, dev->info.id);
-                if (rc != OK) {
+        for (int i = 0; i < controller->device_count; ++i ) {
+            device *dev = &controller->devices[ i];
+            if (dev->info.pid != 0 ) {
+                rc = controller_delete_device( controller, dev->info.id);
+                if (rc != OK ) {
                     return rc;
                 }
                 changed = 1;
                 break;
             }
         }
-    } while (changed);
+    } while (changed );
 
-    rc = write_registry(controller);
-    if (rc != OK) {
+    rc = write_registry( controller);
+    if (rc != OK ) {
         return rc;
     }
 
@@ -1418,32 +1418,32 @@ int controller_destroy(controller *controller)
 }
 
 // Start the controller and go to the event loop
-int controller_run(controller *ctrl) {
-    if (ctrl == NULL) {
+int controller_run( controller *ctrl) {
+    if (ctrl == NULL ) {
         return ERR_INVALID_PARAMETERS;
     }
 
-    printf("Domotics controller started.\n");
-    printf("Type 'help' for available commands.\n");
+    printf( "Domotics controller started.\n");
+    printf( "Type 'help' for available commands.\n");
 
-    return event_loop_run(ctrl);
+    return event_loop_run( ctrl);
 }
 
 // Calculate timeout for control devices.
-static int compute_control_timeout(int child_count)
+static int compute_control_timeout( int child_count)
 {
-    if (child_count < 0) {
+    if (child_count < 0 ) {
         child_count = 0;
     }
 
-    return MIN_RANDOM_DELAY_S + (MAX_RANDOM_DELAY_S * (child_count + 1));
+    return MIN_RANDOM_DELAY_S + (MAX_RANDOM_DELAY_S * (child_count + 1) );
 }
 
 // Assign the right timeout based on the device type
-static int compute_request_timeout(device_type type, int child_count)
+static int compute_request_timeout( device_type type, int child_count)
 {
-    if (type == DEVICE_HUB || type == DEVICE_TIMER || type == DEVICE_CONTROLLER) {
-        return compute_control_timeout(child_count);
+    if (type == DEVICE_HUB || type == DEVICE_TIMER || type == DEVICE_CONTROLLER ) {
+        return compute_control_timeout (child_count);
     }
 
     return TIMEOUT_DEVICE; // Bulbs/Windows have a fixed timeout

@@ -11,7 +11,7 @@
 #include "routing.h"
 #include "utils.h"
 
-#ifndef MAX_DEVICES	
+#ifndef MAX_DEVICES
 #define MAX_DEVICES 128
 #endif
 
@@ -23,703 +23,549 @@ typedef struct {
     int next_request_id;
 } hub_device;
 
-// Helper to print the state
-static const char *state_str(state s)
-{
-    switch (s) {
+
+static const char *state_str(state s) {
+    switch(s) {
         case STATE_ON: return "on";
         case STATE_OFF: return "off";
         default: return "unknown";
     }
 }
 
-// Generates a sequential ID for IPC requests so we can match requests with replies
-static int hub_next_request_id(hub_device *hub)
-{
-    if (hub == NULL) {
+
+static int hub_next_request_id(hub_device *hub) {
+    if(hub==NULL) {
         return 1;
     }
-
-    if (hub->next_request_id <= 0) {
-        hub->next_request_id = 1;
+    if(hub->next_request_id<=0) {
+        hub->next_request_id=1;
     }
-
     return hub->next_request_id++;
 }
 
-// Adds a child to the hub's internal array
-static int hub_add_child_local(hub_device *hub, device_id child_id)
-{
-    int i;
 
-    if (hub == NULL || child_id < 0) {
+static int hub_add_child_local(hub_device *hub,device_id child_id) {
+    int i;
+    if(hub==NULL || child_id<0) {
         return ERR_INVALID_PARAMETERS;
     }
-	
-	// Don't add it if it's already in the list
-    for (i = 0; i < hub->child_count; ++i) {
-        if (hub->children[i] == child_id) {
+    for(i=0;i<hub->child_count;++i) {
+        if(hub->children[i]==child_id) {
             return OK;
         }
     }
-	
-	// Check if the array is full
-    if (hub->child_count >= MAX_DEVICES) {
+    if(hub->child_count>=MAX_DEVICES) {
         return ERR_NOT_ALLOWED;
     }
-
-	// Add it to the end and increment the counter
-    hub->children[hub->child_count++] = child_id;
-    hub->base.child_count = (size_t)hub->child_count;
+    hub->children[hub->child_count++]=child_id;
+    hub->base.child_count=(size_t)hub->child_count;
     return OK;
 }
 
-// Removes a child from the internal array
-static int hub_remove_child_local(hub_device *hub, device_id child_id)
-{
-    int i;
 
-    if (hub == NULL || child_id < 0) {
+static int hub_remove_child_local(hub_device *hub,device_id child_id) {
+    int i;
+    if(hub==NULL || child_id<0) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    for (i = 0; i < hub->child_count; ++i) {
-        if (hub->children[i] == child_id) {
-            hub->children[i] = hub->children[hub->child_count - 1];
+    for(i=0;i<hub->child_count;++i) {
+        if(hub->children[i]==child_id) {
+            hub->children[i]=hub->children[hub->child_count-1];
             hub->child_count--;
-            hub->base.child_count = (size_t)hub->child_count;
+            hub->base.child_count=(size_t)hub->child_count;
             return OK;
         }
     }
-
     return ERR_DEVICE_NOT_FOUND;
 }
 
-// Parsing helpers
-static int parse_child_id_payload(const char *payload, device_id *child_id_out)
-{
+
+static int parse_child_id_payload(const char *payload,device_id *child_id_out) {
     int id;
-
-    if (payload == NULL || child_id_out == NULL) {
+    if(payload==NULL || child_id_out==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    if (sscanf(payload, "%d", &id) != 1 || id < 0) {
+    if(sscanf(payload,"%d",&id)!=1 || id<0) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    *child_id_out = (device_id)id;
+    *child_id_out=(device_id)id;
     return OK;
 }
 
-static int parse_link_parent_id(const domo_message *req, int *parent_id_out)
-{
+
+static int parse_link_parent_id(const domo_message *req,int *parent_id_out) {
     int parent_id;
-
-    if (req == NULL || parent_id_out == NULL) {
+    if(req==NULL || parent_id_out==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    if (sscanf(req->payload, "parent,%d", &parent_id) != 1) {
+    if(sscanf(req->payload,"parent,%d",&parent_id)!=1) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    if (parent_id < 0) {
+    if(parent_id<0) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    *parent_id_out = parent_id;
+    *parent_id_out=parent_id;
     return OK;
 }
 
-// Loads the children from the routing table into the hub's local array
-static int hub_load_children(hub_device *hub)
-{
-    int count = 0;
-    int rc;
 
-    if (hub == NULL) {
+static int hub_load_children(hub_device *hub) {
+    int count=0;
+    int rc;
+    if(hub==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    if (hub->child_count > 0) {
+    if(hub->child_count>0) {
         return OK;
     }
-
-    memset(hub->children, 0, sizeof(hub->children));
-    hub->child_count = 0;
-
-	// If the base device somehow already has children, copy them over
-    if (hub->base.child_ids != NULL && hub->base.child_count > 0) {
-        size_t n = hub->base.child_count;
-        if (n > MAX_DEVICES) {
-            n = MAX_DEVICES;
+    memset(hub->children,0,sizeof(hub->children));
+    hub->child_count=0;
+    if(hub->base.child_ids!=NULL && hub->base.child_count>0) {
+        size_t n=hub->base.child_count;
+        if(n>MAX_DEVICES) {
+            n=MAX_DEVICES;
         }
-
-        for (size_t i = 0; i < n; ++i) {
-            hub->children[i] = hub->base.child_ids[i];
+        for(size_t i=0;i<n;++i) {
+            hub->children[i]=hub->base.child_ids[i];
         }
-
-        hub->child_count = (int)n;
-        hub->base.child_count = (size_t)hub->child_count;
+        hub->child_count=(int)n;
+        hub->base.child_count=(size_t)hub->child_count;
         return OK;
     }
-
-	// Otherwise, fetch them using the routing logic
-    rc = routing_collect_children(hub->base.info.id,
-                                  hub->children,
-                                  MAX_DEVICES,
-                                  &count);
-    if (rc != OK) {
+    rc=routing_collect_children(hub->base.info.id,
+                                hub->children,
+                                MAX_DEVICES,
+                                &count);
+    if(rc!=OK) {
         return rc;
     }
-
-    if (count < 0 || count > MAX_DEVICES) {
+    if(count<0 || count>MAX_DEVICES) {
         return ERR_IPC_FAILURE;
     }
-
-    hub->child_count = count;
-    hub->base.child_count = (size_t)hub->child_count;
+    hub->child_count=count;
+    hub->base.child_count=(size_t)hub->child_count;
     return OK;
 }
 
-// Extracts command arguments 
+
 static int parse_switch_args(const domo_message *req,
-                             char *label, size_t label_len,
-                             char *position, size_t position_len)
-{
+                             char *label,size_t label_len,
+                             char *position,size_t position_len) {
     char local[MAX_MSG_LEN];
     char *comma;
-
-    if (req == NULL || label == NULL || position == NULL ||
-        label_len == 0 || position_len == 0) {
+    if(req==NULL || label==NULL || position==NULL ||
+       label_len==0 || position_len==0) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    label[0] = '\0';
-    position[0] = '\0';
-
-    if (req->arg1[0] != '\0' && req->arg2[0] != '\0') {
-        snprintf(label, label_len, "%s", req->arg1);
-        snprintf(position, position_len, "%s", req->arg2);
+    label[0]='\0';
+    position[0]='\0';
+    if(req->arg1[0]!='\0' && req->arg2[0]!='\0') {
+        snprintf(label,label_len,"%s",req->arg1);
+        snprintf(position,position_len,"%s",req->arg2);
         return OK;
     }
-
-    if (req->payload[0] == '\0') {
+    if(req->payload[0]=='\0') {
         return ERR_INVALID_PARAMETERS;
     }
-
-    snprintf(local, sizeof(local), "%s", req->payload);
-    comma = strchr(local, ',');
-    if (comma == NULL) {
+    snprintf(local,sizeof(local),"%s",req->payload);
+    comma=strchr(local,',');
+    if(comma==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    *comma = '\0';
-    snprintf(label, label_len, "%s", local);
-    snprintf(position, position_len, "%s", comma + 1);
-
-    if (label[0] == '\0' || position[0] == '\0') {
+    *comma='\0';
+    snprintf(label,label_len,"%s",local);
+    snprintf(position,position_len,"%s",comma+1);
+    if(label[0]=='\0' || position[0]=='\0') {
         return ERR_INVALID_PARAMETERS;
     }
-
     return OK;
 }
 
-// Converts the string "on" or "off" to our internal enum state
-static int expected_state_from_position(const char *position, state *out_state)
-{
-    if (position == NULL || out_state == NULL) {
+
+static int expected_state_from_position(const char *position,state *out_state) {
+    if(position==NULL || out_state==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    if (strcmp(position, "on") == 0) {
-        *out_state = STATE_ON;
+    if(strcmp(position,"on")==0) {
+        *out_state=STATE_ON;
         return OK;
     }
-
-    if (strcmp(position, "off") == 0) {
-        *out_state = STATE_OFF;
+    if(strcmp(position,"off")==0) {
+        *out_state=STATE_OFF;
         return OK;
     }
-
     return ERR_INVALID_PARAMETERS;
 }
 
-// Parses the INFO response from a child to see if it's currently on or off
-static int extract_child_state_from_info(const char *payload, state *out_state)
-{
-    if (payload == NULL || out_state == NULL) {
+
+static int extract_child_state_from_info(const char *payload,state *out_state) {
+    if(payload==NULL || out_state==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-	
-	// Parses the INFO response from a child to see if it's currently on or off
-    if (strstr(payload, "state=on") != NULL || strstr(payload, "state=open") != NULL) {
-        *out_state = STATE_ON;
+    if(strstr(payload,"state=on")!=NULL || strstr(payload,"state=open")!=NULL) {
+        *out_state=STATE_ON;
         return OK;
     }
-	
-	// Accept both "off" (bulbs) and "closed" (windows)
-    if (strstr(payload, "state=off") != NULL || strstr(payload, "state=closed") != NULL) {
-        *out_state = STATE_OFF;
+    if(strstr(payload,"state=off")!=NULL || strstr(payload,"state=closed")!=NULL) {
+        *out_state=STATE_OFF;
         return OK;
     }
-
     return ERR_INVALID_STATE;
 }
 
-// Creates an IPC message, sends it to a specific child, and waits for their reply
+
+/* send cmd to child and block for reply */
 static int hub_send_command_to_child(hub_device *hub,
                                      device_id child_id,
                                      const char *command,
                                      const char *arg1,
                                      const char *arg2,
                                      const char *payload,
-                                     domo_message *child_resp)
-{
+                                     domo_message *child_resp) {
     domo_message req;
     char target_fifo[PATH_MAX];
     char reply_fifo[PATH_MAX];
     int rc;
-
-    if (hub == NULL || command == NULL || child_resp == NULL) {
+    if(hub==NULL || command==NULL || child_resp==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    memset(&req, 0, sizeof(req));
-    memset(child_resp, 0, sizeof(*child_resp));
-
-	// Pack the request envelope
-    req.kind = MSG_REQUEST;
-    snprintf(req.command, sizeof(req.command), "%s", command);
-    snprintf(req.sender_id, sizeof(req.sender_id), "%d", hub->base.info.id);
-    req.target_id = child_id;
-    req.src_id = hub->base.info.id;
-    req.dst_id = child_id;
-    req.src_pid = getpid();
-    req.request_id = hub_next_request_id(hub);
-    req.status = OK;
-
-    if (arg1 != NULL) {
-        snprintf(req.arg1, sizeof(req.arg1), "%s", arg1);
+    memset(&req,0,sizeof(req));
+    memset(child_resp,0,sizeof(*child_resp));
+    req.kind=MSG_REQUEST;
+    snprintf(req.command,sizeof(req.command),"%s",command);
+    snprintf(req.sender_id,sizeof(req.sender_id),"%d",hub->base.info.id);
+    req.target_id=child_id;
+    req.src_id=hub->base.info.id;
+    req.dst_id=child_id;
+    req.src_pid=getpid();
+    req.request_id=hub_next_request_id(hub);
+    req.status=OK;
+    if(arg1!=NULL) {
+        snprintf(req.arg1,sizeof(req.arg1),"%s",arg1);
     }
-    if (arg2 != NULL) {
-        snprintf(req.arg2, sizeof(req.arg2), "%s", arg2);
+    if(arg2!=NULL) {
+        snprintf(req.arg2,sizeof(req.arg2),"%s",arg2);
     }
-    if (payload != NULL) {
-        snprintf(req.payload, sizeof(req.payload), "%s", payload);
+    if(payload!=NULL) {
+        snprintf(req.payload,sizeof(req.payload),"%s",payload);
     }
-
-    rc = make_device_fifo_path(child_id, target_fifo, sizeof(target_fifo));
-    if (rc != OK) {
+    rc=make_device_fifo_path(child_id,target_fifo,sizeof(target_fifo));
+    if(rc!=OK) {
         return rc;
     }
-	
-	// Prepare pipes
-    rc = make_reply_fifo_path(req.src_pid, req.request_id, reply_fifo, sizeof(reply_fifo));
-    if (rc != OK) {
+    rc=make_reply_fifo_path(req.src_pid,req.request_id,reply_fifo,sizeof(reply_fifo));
+    if(rc!=OK) {
         return rc;
     }
-	
-	// Send and block until we get a reply or a timeout
-    return request_reply_timeout(target_fifo, reply_fifo, &req, child_resp, TIMEOUT_DEVICE);
+    return request_reply_timeout(target_fifo,reply_fifo,&req,child_resp,TIMEOUT_DEVICE);
 }
 
-// When you turn the HUB on/off, it loops through ALL its children and turns them on/off too
-static int hub_propagate_to_children(device *dev, const domo_message *req)
-{
-    hub_device *hub = (hub_device *)dev;
+
+static int hub_propagate_to_children(device *dev,const domo_message *req) {
+    hub_device *hub=(hub_device *)dev;
     int rc;
     int i;
     char label[32];
     char position[32];
     char payload[96];
     state expected_state;
-
-    if (hub == NULL || req == NULL) {
+    if(hub==NULL || req==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    rc = hub_load_children(hub);
-    if (rc != OK) {
+    rc=hub_load_children(hub);
+    if(rc!=OK) {
         return rc;
     }
-
-    rc = parse_switch_args(req, label, sizeof(label), position, sizeof(position));
-    if (rc != OK) {
+    rc=parse_switch_args(req,label,sizeof(label),position,sizeof(position));
+    if(rc!=OK) {
         return rc;
     }
-
-    rc = expected_state_from_position(position, &expected_state);
-    if (rc != OK) {
+    rc=expected_state_from_position(position,&expected_state);
+    if(rc!=OK) {
         return rc;
     }
-
-    /*	Basically builds a universal payload. It bypasses specific labels like 
-    	"open" (windows) or "power" (bulbs) and uses "sys_state" so all devices understand it. */
-	snprintf(payload, sizeof(payload), "sys_state,%s", position);
-
-    for (i = 0; i < hub->child_count; ++i) {
+    snprintf(payload,sizeof(payload),"sys_state,%s",position);
+    for(i=0;i<hub->child_count;++i) {
         domo_message child_resp;
-
-        rc = hub_send_command_to_child(hub,
-                                       hub->children[i],
-                                       CMD_SWITCH,
-                                       "sys_state",
-                                       position,
-                                       payload,
-                                       &child_resp);
-        if (rc != OK) {
-            continue; // The IPC system call failed (e.g., broken pipe or a dead child process)
+        rc=hub_send_command_to_child(hub,
+                                     hub->children[i],
+                                     CMD_SWITCH,
+                                     "sys_state",
+                                     position,
+                                     payload,
+                                     &child_resp);
+        if(rc!=OK) {
+            continue;
         }
-
-        if (child_resp.status != OK) {
+        if(child_resp.status!=OK) {
             return child_resp.status;
         }
     }
-	
-	// After a successful propagation, everything is synchronized
-    hub->manual_override = false;
-    hub->base.info.manual_override = false;
-    hub->base.info.state = expected_state;
-
+    hub->manual_override=false;
+    hub->base.info.manual_override=false;
+    hub->base.info.state=expected_state;
     return OK;
 }
 
-// This function checks if ALL children are in the exact same state.
-static int hub_check_children_consistency(device *dev, bool *consistent_out)
-{
-    hub_device *hub = (hub_device *)dev;
+
+static int hub_check_children_consistency(device *dev,bool *consistent_out) {
+    hub_device *hub=(hub_device *)dev;
     int rc;
     int i;
-    bool first_set = false;
-    state first_state = STATE_OFF;
-
-    if (hub == NULL || consistent_out == NULL) {
+    bool first_set=false;
+    state first_state=STATE_OFF;
+    if(hub==NULL || consistent_out==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
-    *consistent_out = true;	// Assume they are consistent until proven otherwise
-
-    rc = hub_load_children(hub);
-    if (rc != OK) {
+    *consistent_out=true;
+    rc=hub_load_children(hub);
+    if(rc!=OK) {
         return rc;
     }
-	
-	// If it has no children, it's consistent by definition
-    if (hub->child_count == 0) {
+    if(hub->child_count==0) {
         return OK;
     }
-
-    for (i = 0; i < hub->child_count; ++i) {
+    for(i=0;i<hub->child_count;++i) {
         domo_message resp;
         state child_state;
-		
-		// Ask the child for its info
-        rc = hub_send_command_to_child(hub,
-                                       hub->children[i],
-                                       CMD_INFO,
-                                       "",
-                                       "",
-                                       "ALL",
-                                       &resp);
-        if (rc != OK || resp.status != OK) {
-            *consistent_out = false;
+        rc=hub_send_command_to_child(hub,
+                                     hub->children[i],
+                                     CMD_INFO,
+                                     "",
+                                     "",
+                                     "ALL",
+                                     &resp);
+        if(rc!=OK || resp.status!=OK) {
+            *consistent_out=false;
             return OK;
         }
-		
-		// Figure out if the child is on or off
-        rc = extract_child_state_from_info(resp.payload, &child_state);
-        if (rc != OK) {
-            *consistent_out = false;
+        rc=extract_child_state_from_info(resp.payload,&child_state);
+        if(rc!=OK) {
+            *consistent_out=false;
             return OK;
         }
-		
-		// Save the state of the VERY FIRST child we check
-        if (!first_set) {
-            first_state = child_state;
-            first_set = true;
-        } 
-        // Compare every subsequent child to the first one. If they differ, the hub is inconsistent
-		else if (child_state != first_state) {
-            *consistent_out = false;
+        if(!first_set) {
+            first_state=child_state;
+            first_set=true;
+        } else if(child_state!=first_state) {
+            *consistent_out=false;
             return OK;
         }
     }
-	
-	// If we made it here, all children have the exact same state
-    hub->base.info.state = first_state;
+    hub->base.info.state=first_state;
     return OK;
 }
 
-// Prepares the string to print when the user types 'info <id>'
-static int hub_build_info_payload(hub_device *hub, char *buf, size_t len)
-{
-    bool consistent = true;
-    int rc;
 
-    if (hub == NULL || buf == NULL) {
+static int hub_build_info_payload(hub_device *hub,char *buf,size_t len) {
+    bool consistent=true;
+    int rc;
+    if(hub==NULL || buf==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-	
-	// Always check children before answering!
-    rc = hub_check_children_consistency(&hub->base, &consistent);
-    if (rc != OK) {
-        snprintf(buf, len, "hub id=%d parent=%d state=%s",
+    rc=hub_check_children_consistency(&hub->base,&consistent);
+    if(rc!=OK) {
+        snprintf(buf,len,"hub id=%d parent=%d state=%s",
                  hub->base.info.id,
                  hub->base.info.logical_parent_id,
                  state_str(hub->base.info.state));
         return OK;
     }
-
-    hub->manual_override = !consistent;
-    hub->base.info.manual_override = !consistent;
-
-    if (!consistent) {
-        snprintf(buf, len, "hub id=%d parent=%d state=manual_override",
-                    hub->base.info.id,
-                    hub->base.info.logical_parent_id);
+    hub->manual_override=!consistent;
+    hub->base.info.manual_override=!consistent;
+    if(!consistent) {
+        snprintf(buf,len,"hub id=%d parent=%d state=manual_override",
+                 hub->base.info.id,
+                 hub->base.info.logical_parent_id);
     } else {
-        snprintf(buf, len, "hub id=%d parent=%d state=%s",
+        snprintf(buf,len,"hub id=%d parent=%d state=%s",
                  hub->base.info.id,
                  hub->base.info.logical_parent_id,
                  state_str(hub->base.info.state));
     }
-
     return OK;
 }
 
-// handle message hub script
-static int hub_handle_message(device *dev, const domo_message *req, domo_message *resp)
-{
-    hub_device *hub = (hub_device *)dev;
-    int rc;
 
-    if (hub == NULL || req == NULL || resp == NULL) {
+/* main message dispatcher for hub */
+static int hub_handle_message(device *dev,const domo_message *req,domo_message *resp) {
+    hub_device *hub=(hub_device *)dev;
+    int rc;
+    if(hub==NULL || req==NULL || resp==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-	
-	// Prepare standard response headers
-    memset(resp, 0, sizeof(*resp));
-    resp->kind = MSG_RESPONSE;
-    snprintf(resp->command, sizeof(resp->command), "%s", req->command);
-    snprintf(resp->sender_id, sizeof(resp->sender_id), "%d", hub->base.info.id);
-    resp->src_id = hub->base.info.id;
-    resp->dst_id = req->src_id;
-    resp->src_pid = getpid();
-    resp->request_id = req->request_id;
-    resp->status = OK;
-
+    memset(resp,0,sizeof(*resp));
+    resp->kind=MSG_RESPONSE;
+    snprintf(resp->command,sizeof(resp->command),"%s",req->command);
+    snprintf(resp->sender_id,sizeof(resp->sender_id),"%d",hub->base.info.id);
+    resp->src_id=hub->base.info.id;
+    resp->dst_id=req->src_id;
+    resp->src_pid=getpid();
+    resp->request_id=req->request_id;
+    resp->status=OK;
     simulate_random_delay();
-
-	// COMMAND: INFO
-    if (strcmp(req->command, CMD_INFO) == 0) {
-        return hub_build_info_payload(hub, resp->payload, sizeof(resp->payload));
+    if(strcmp(req->command,CMD_INFO)==0) {
+        return hub_build_info_payload(hub,resp->payload,sizeof(resp->payload));
     }
-	
-	// COMMAND: CHILD ADDED
-    if (strcmp(req->command, "CHILD_ADDED") == 0) {
+    if(strcmp(req->command,"CHILD_ADDED")==0) {
         device_id child_id;
-        rc = parse_child_id_payload(req->payload, &child_id);
-        if (rc != OK) {
-            resp->status = ERR_INVALID_PARAMETERS;
-            snprintf(resp->payload, sizeof(resp->payload), "invalid child_added payload");
+        rc=parse_child_id_payload(req->payload,&child_id);
+        if(rc!=OK) {
+            resp->status=ERR_INVALID_PARAMETERS;
+            snprintf(resp->payload,sizeof(resp->payload),"invalid child_added payload");
             return OK;
         }
-
-        rc = hub_add_child_local(hub, child_id);
-        if (rc != OK) {
-            resp->status = rc;
-            snprintf(resp->payload, sizeof(resp->payload), "failed to add child");
+        rc=hub_add_child_local(hub,child_id);
+        if(rc!=OK) {
+            resp->status=rc;
+            snprintf(resp->payload,sizeof(resp->payload),"failed to add child");
             return OK;
         }
-
-        snprintf(resp->payload, sizeof(resp->payload),
+        snprintf(resp->payload,sizeof(resp->payload),
                  "hub %d added child %d",
                  hub->base.info.id,
                  child_id);
         return OK;
     }
-	
-	// COMMAND: CHILD REMOVED
-    if (strcmp(req->command, "CHILD_REMOVED") == 0) {
+    if(strcmp(req->command,"CHILD_REMOVED")==0) {
         device_id child_id;
-        rc = parse_child_id_payload(req->payload, &child_id);
-        if (rc != OK) {
-            resp->status = ERR_INVALID_PARAMETERS;
-            snprintf(resp->payload, sizeof(resp->payload), "invalid child_removed payload");
+        rc=parse_child_id_payload(req->payload,&child_id);
+        if(rc!=OK) {
+            resp->status=ERR_INVALID_PARAMETERS;
+            snprintf(resp->payload,sizeof(resp->payload),"invalid child_removed payload");
             return OK;
         }
-
-        rc = hub_remove_child_local(hub, child_id);
-        if (rc != OK && rc != ERR_DEVICE_NOT_FOUND) {
-            resp->status = rc;
-            snprintf(resp->payload, sizeof(resp->payload), "failed to remove child");
+        rc=hub_remove_child_local(hub,child_id);
+        if(rc!=OK && rc!=ERR_DEVICE_NOT_FOUND) {
+            resp->status=rc;
+            snprintf(resp->payload,sizeof(resp->payload),"failed to remove child");
             return OK;
         }
-
-        snprintf(resp->payload, sizeof(resp->payload),
+        snprintf(resp->payload,sizeof(resp->payload),
                  "hub %d removed child %d",
                  hub->base.info.id,
                  child_id);
         return OK;
     }
-	
-	// COMMAND: LINK
-    if (strcmp(req->command, CMD_LINK) == 0) {
+    if(strcmp(req->command,CMD_LINK)==0) {
         int parent_id;
-        rc = parse_link_parent_id(req, &parent_id);
-        if (rc != OK) {
-            resp->status = ERR_INVALID_PARAMETERS;
-            snprintf(resp->payload, sizeof(resp->payload), "invalid link payload");
+        rc=parse_link_parent_id(req,&parent_id);
+        if(rc!=OK) {
+            resp->status=ERR_INVALID_PARAMETERS;
+            snprintf(resp->payload,sizeof(resp->payload),"invalid link payload");
             return OK;
         }
-
-        hub->base.info.logical_parent_id = parent_id;
-        snprintf(resp->payload, sizeof(resp->payload),
+        hub->base.info.logical_parent_id=parent_id;
+        snprintf(resp->payload,sizeof(resp->payload),
                  "hub %d linked to parent %d",
                  hub->base.info.id,
                  parent_id);
         return OK;
     }
-	
-	// COMMAND: SWITCH
-    if (strcmp(req->command, CMD_SWITCH) == 0) {
+    if(strcmp(req->command,CMD_SWITCH)==0) {
         char label[32];
         char position[32];
         state expected_state;
-
-        rc = parse_switch_args(req, label, sizeof(label), position, sizeof(position));
-        if (rc != OK) {
-            resp->status = ERR_INVALID_PARAMETERS;
-            snprintf(resp->payload, sizeof(resp->payload), "invalid switch payload");
+        rc=parse_switch_args(req,label,sizeof(label),position,sizeof(position));
+        if(rc!=OK) {
+            resp->status=ERR_INVALID_PARAMETERS;
+            snprintf(resp->payload,sizeof(resp->payload),"invalid switch payload");
             return OK;
         }
-
-        if (strcmp(label, "power") != 0 && strcmp(label, "sys_state") != 0) {
-            resp->status = ERR_INVALID_PARAMETERS;
-            snprintf(resp->payload, sizeof(resp->payload), "invalid switch label");
+        if(strcmp(label,"power")!=0 && strcmp(label,"sys_state")!=0) {
+            resp->status=ERR_INVALID_PARAMETERS;
+            snprintf(resp->payload,sizeof(resp->payload),"invalid switch label");
             return OK;
         }
-
-        rc = expected_state_from_position(position, &expected_state);
-        if (rc != OK) {
-            resp->status = ERR_INVALID_PARAMETERS;
-            snprintf(resp->payload, sizeof(resp->payload), "invalid switch position");
+        rc=expected_state_from_position(position,&expected_state);
+        if(rc!=OK) {
+            resp->status=ERR_INVALID_PARAMETERS;
+            snprintf(resp->payload,sizeof(resp->payload),"invalid switch position");
             return OK;
         }
-		
-		// Set local state
-        hub->base.info.state = expected_state;
-        hub->manual_override = false;
-        hub->base.info.manual_override = false;
-		
-		// Push the new state to all connected children
-        rc = hub_propagate_to_children(dev, req);
-        if (rc != OK) {
-            resp->status = rc;
-            snprintf(resp->payload, sizeof(resp->payload),
+        hub->base.info.state=expected_state;
+        hub->manual_override=false;
+        hub->base.info.manual_override=false;
+        rc=hub_propagate_to_children(dev,req);
+        if(rc!=OK) {
+            resp->status=rc;
+            snprintf(resp->payload,sizeof(resp->payload),
                     "failed to propagate switch to children");
             return OK;
         }
-
-        snprintf(resp->payload, sizeof(resp->payload),
+        snprintf(resp->payload,sizeof(resp->payload),
                 "hub %d switched %s",
                 hub->base.info.id,
                 state_str(hub->base.info.state));
         return OK;
     }
-	
-	// COMMAND: STATUS
-	// A child sends this if a human manually overrides it
-    if (strcmp(req->command, CMD_STATUS) == 0) {
-        if (strncmp(req->payload, "manual_override,", 16) == 0) {
-            hub->manual_override = true;
-            hub->base.info.manual_override = true;
+    if(strcmp(req->command,CMD_STATUS)==0) {
+        if(strncmp(req->payload,"manual_override,",16)==0) {
+            hub->manual_override=true;
+            hub->base.info.manual_override=true;
             return OK;
         }
-
         return OK;
     }
-
-    resp->status = ERR_INVALID_COMMAND;
-    snprintf(resp->payload, sizeof(resp->payload), "unknown command");
+    resp->status=ERR_INVALID_COMMAND;
+    snprintf(resp->payload,sizeof(resp->payload),"unknown command");
     return OK;
 }
 
-// Initialize hub defaults
-static int hub_init(device *dev)
-{
-    hub_device *hub = (hub_device *)dev;
 
-    if (hub == NULL) {
+static int hub_init(device *dev) {
+    hub_device *hub=(hub_device *)dev;
+    if(hub==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
     hub->base.info.logical_parent_id=0;
-    memset(hub->children, 0, sizeof(hub->children));	// Start with empty array
-    hub->child_count = 0;
-    hub->manual_override = false;
-    hub->next_request_id = 1;
-
-    hub->base.info.state = STATE_OFF;
-    hub->base.info.manual_override = false;
-	
-	// Link the base pointers to our static array
-    hub->base.child_ids = hub->children;
-    hub->base.child_capacity = MAX_DEVICES;
-    hub->base.child_count = 0;
-
+    memset(hub->children,0,sizeof(hub->children));
+    hub->child_count=0;
+    hub->manual_override=false;
+    hub->next_request_id=1;
+    hub->base.info.state=STATE_OFF;
+    hub->base.info.manual_override=false;
+    hub->base.child_ids=hub->children;
+    hub->base.child_capacity=MAX_DEVICES;
+    hub->base.child_count=0;
     return OK;
 }
 
-// Cleanup function
-static int hub_destroy(device *dev)
-{
-    if (dev == NULL) {
+
+static int hub_destroy(device *dev) {
+    if(dev==NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-
     return OK;
 }
 
-// entry point for hub process
-int hub_device_main(device_id id)
-{
+
+/* entry point */
+int hub_device_main(device_id id) {
     hub_device hub;
-    int fd, dummy_fd;
+    int fd,dummy_fd;
     int rc;
-
-    memset(&hub, 0, sizeof(hub));
-
-    rc = device_common_init(&hub.base, id, DEVICE_HUB);
-    if (rc != OK) {
+    /* printf("hub_device_main id=%d\n",id); */
+    memset(&hub,0,sizeof(hub));
+    rc=device_common_init(&hub.base,id,DEVICE_HUB);
+    if(rc!=OK) {
         return rc;
     }
-
-	// Assign functions
-    hub.base.handle_message = hub_handle_message;
-    hub.base.destroy = hub_destroy;
-
-    rc = hub_init(&hub.base);
-    if (rc != OK) {
+    hub.base.handle_message=hub_handle_message;
+    hub.base.destroy=hub_destroy;
+    rc=hub_init(&hub.base);
+    if(rc!=OK) {
         return rc;
     }
-
-    rc = device_common_setup_fifo(&hub.base);
-    if (rc != OK) {
+    rc=device_common_setup_fifo(&hub.base);
+    if(rc!=OK) {
         return rc;
     }
-
-    rc = device_common_open_fifo(&hub.base, &fd, &dummy_fd);
-    if (rc != OK) {
+    rc=device_common_open_fifo(&hub.base,&fd,&dummy_fd);
+    if(rc!=OK) {
         return rc;
     }
-
-    // Enter message loop
-    rc = device_common_main_loop(&hub.base, fd);
-    
-	// Process killed, cleanup
-    device_common_cleanup(&hub.base, fd, dummy_fd);
+    rc=device_common_main_loop(&hub.base,fd);
+    device_common_cleanup(&hub.base,fd,dummy_fd);
     return rc;
 }

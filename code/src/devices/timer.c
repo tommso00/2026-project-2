@@ -482,7 +482,7 @@ static int timer_update(device *dev){
 // emtry
 int timer_device_main(device_id id) {
     timer_device timer;
-    int fd,dummy_fd;
+    int fd,keep_alive_fd;
     int rc;
 
     memset(&timer,0,sizeof(timer));
@@ -511,7 +511,7 @@ int timer_device_main(device_id id) {
     }
 	
 	// Open FIFO for reading
-    rc=device_common_open_fifo(&timer.base,&fd,&dummy_fd) ;
+    rc=device_common_open_fifo(&timer.base,&fd,&keep_alive_fd) ;
     if(rc!=OK) {
         return rc;
     }
@@ -519,6 +519,6 @@ int timer_device_main(device_id id) {
 	// Enter infinite loop (which will constantly call timer_update)
     rc=device_common_main_loop(&timer.base,fd) ;
     // Cleanup on exit
-    device_common_cleanup(&timer.base,fd,dummy_fd);
+    device_common_cleanup(&timer.base,fd,keep_alive_fd);
     return rc;
 }

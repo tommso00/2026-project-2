@@ -151,8 +151,8 @@ int device_common_setup_fifo(device *dev)
 }
 
 // Opens the FIFO for reading so the device can receive commands
-int device_common_open_fifo(device *dev, int *fd_out, int *dummy_fd_out) {
-    int fd, dummy_fd;
+int device_common_open_fifo(device *dev, int *fd_out, int *keep_alive_fd_out) {
+    int fd, keep_alive_fd;
 
     if (dev == NULL || fd_out == NULL) {
         return ERR_INVALID_PARAMETERS;
@@ -165,11 +165,11 @@ int device_common_open_fifo(device *dev, int *fd_out, int *dummy_fd_out) {
         return ERR_SYSTEM;
     }
 
-    dummy_fd = open(dev->info.fifo_path, O_WRONLY | O_NONBLOCK);
+    keep_alive_fd = open(dev->info.fifo_path, O_WRONLY | O_NONBLOCK);
 
     *fd_out = fd;
-    if (dummy_fd_out != NULL) {
-        *dummy_fd_out = dummy_fd;
+    if (keep_alive_fd_out != NULL) {
+        *keep_alive_fd_out = keep_alive_fd;
     }
 
     return OK;
@@ -325,7 +325,7 @@ Cosa stampa: Tutti i dettagli del messaggio ricevuto (comando, sorgente, destina
 }
 
 // Clean up everything before the process exits
-int device_common_cleanup(device *dev, int fd, int dummy_fd)
+int device_common_cleanup(device *dev, int fd, int keep_alive_fd)
 {
     if (dev == NULL) {
         return ERR_INVALID_PARAMETERS;
@@ -334,8 +334,8 @@ int device_common_cleanup(device *dev, int fd, int dummy_fd)
     if (fd >= 0) {
         close(fd);
     }
-    if (dummy_fd >= 0) {
-        close(dummy_fd);
+    if (keep_alive_fd >= 0) {
+        close(keep_alive_fd);
     }
 
     unlink(dev->info.fifo_path);	// Delete the physical file

@@ -68,9 +68,9 @@ int device_set_parameter(device *dev , const char *key ,const char *value);
 int device_common_init(device *dev, device_id id, device_type type);
 int device_common_setup_fifo ( device *dev);
 
-int device_common_open_fifo (device *dev, int *fd_out , int *dummy_fd_out);
+int device_common_open_fifo (device *dev, int *fd_out , int *keep_alive_fd_out);
 int device_common_main_loop (device *dev, int fd) ;
-int device_common_cleanup ( device *dev, int fd, int dummy_fd) ;
+int device_common_cleanup ( device *dev, int fd, int keep_alive_fd) ;
 
 
 #endif

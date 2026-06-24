@@ -687,7 +687,7 @@ static int hub_destroy(device *dev)
 int hub_device_main(device_id id)
 {
     hub_device hub;
-    int fd, dummy_fd;
+    int fd, keep_alive_fd;
     int rc;
 
     memset(&hub, 0, sizeof(hub));
@@ -711,7 +711,7 @@ int hub_device_main(device_id id)
         return rc;
     }
 
-    rc = device_common_open_fifo(&hub.base, &fd, &dummy_fd);
+    rc = device_common_open_fifo(&hub.base, &fd, &keep_alive_fd);
     if (rc != OK) {
         return rc;
     }
@@ -720,6 +720,6 @@ int hub_device_main(device_id id)
     rc = device_common_main_loop(&hub.base, fd);
     
 	// Process killed, cleanup
-    device_common_cleanup(&hub.base, fd, dummy_fd);
+    device_common_cleanup(&hub.base, fd, keep_alive_fd);
     return rc;
 }

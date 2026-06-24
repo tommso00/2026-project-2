@@ -234,7 +234,7 @@ static int window_update(device *dev) {
 // entry point for the window process
 int window_device_main(device_id id){
     window_device window;
-    int fd, dummy_fd ;
+    int fd, keep_alive_fd ;
     int rc;
 
     memset(&window,0,sizeof(window));
@@ -264,7 +264,7 @@ int window_device_main(device_id id){
     }
     
     // Open the FIFO so we can start reading commands
-    rc = device_common_open_fifo(&window.base, &fd, &dummy_fd);
+    rc = device_common_open_fifo(&window.base, &fd, &keep_alive_fd);
     if (rc != OK) {
         return rc;
     }
@@ -273,6 +273,6 @@ int window_device_main(device_id id){
     rc =device_common_main_loop(&window.base, fd);
     
     // Once the loop breaks, clean up resources
-    device_common_cleanup(&window.base, fd, dummy_fd);
+    device_common_cleanup(&window.base, fd, keep_alive_fd);
     return rc;}
 

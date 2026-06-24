@@ -253,7 +253,7 @@ static int bulb_destroy(device *dev)
 int bulb_device_main(device_id id)
 {
     bulb_device bulb;
-    int fd, dummy_fd;
+    int fd, keep_alive_fd;
     int rc;
 
 	// Set up the generic device parts
@@ -280,7 +280,7 @@ int bulb_device_main(device_id id)
     }
 
 	// Open the FIFO for reading
-    rc = device_common_open_fifo(&bulb.base, &fd, &dummy_fd);
+    rc = device_common_open_fifo(&bulb.base, &fd, &keep_alive_fd);
     if (rc != OK) {
         return rc;
     }
@@ -289,6 +289,6 @@ int bulb_device_main(device_id id)
     rc = device_common_main_loop(&bulb.base, fd);
     
     // When the loop breaks, clean up files and memory
-    device_common_cleanup(&bulb.base, fd, dummy_fd);
+    device_common_cleanup(&bulb.base, fd, keep_alive_fd);
     return rc;
 }

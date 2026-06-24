@@ -14,7 +14,6 @@ CONTROLLER_SRCS = \
 	$(SRC_DIR)/controller/parser.c \
 	$(SRC_DIR)/controller/commands.c \
 	$(SRC_DIR)/core/device_common.c \
-	$(SRC_DIR)/core/registry.c \
 	$(SRC_DIR)/core/routing.c \
 	$(SRC_DIR)/core/hierarchy.c \
 	$(SRC_DIR)/core/serialization.c \
@@ -24,14 +23,11 @@ CONTROLLER_SRCS = \
 	$(SRC_DIR)/ipc/message.c \
 	$(SRC_DIR)/ipc/request_reply.c \
 	$(SRC_DIR)/ipc/event_loop.c \
-	$(SRC_DIR)/devices/controller_device.c \
 	$(SRC_DIR)/devices/hub.c \
 	$(SRC_DIR)/devices/timer.c \
 	$(SRC_DIR)/devices/bulb.c \
 	$(SRC_DIR)/devices/window.c \
 	$(SRC_DIR)/devices/fridge.c \
-	$(SRC_DIR)/utils/logging.c \
-	$(SRC_DIR)/utils/time_utils.c \
 	$(SRC_DIR)/utils/random_delay.c \
 	$(SRC_DIR)/utils/cleanup.c
 
@@ -41,8 +37,7 @@ MANUAL_SRCS = \
     $(SRC_DIR)/ipc/fifo.c \
     $(SRC_DIR)/ipc/message.c \
     $(SRC_DIR)/core/serialization.c \
-    $(SRC_DIR)/core/errors.c \
-    $(SRC_DIR)/utils/logging.c
+    $(SRC_DIR)/core/errors.c
 
 CONTROLLER_BIN = $(BIN_DIR)/domotics_controller
 MANUAL_BIN = $(BIN_DIR)/manual_client

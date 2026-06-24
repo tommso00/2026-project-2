@@ -315,7 +315,7 @@ static int fridge_update(device *dev) {
 // entry point for the fridge process
 int fridge_device_main(device_id id) {
     fridge_device fridge;
-    int fd, dummy_fd;
+    int fd, keep_alive_fd;
     int rc;
 
     memset(&fridge, 0, sizeof(fridge));
@@ -341,7 +341,7 @@ int fridge_device_main(device_id id) {
         return rc;
     }
 
-    rc = device_common_open_fifo(&fridge.base, &fd, &dummy_fd);
+    rc = device_common_open_fifo(&fridge.base, &fd, &keep_alive_fd);
     if (rc != OK) {
         return rc;
     }
@@ -350,7 +350,7 @@ int fridge_device_main(device_id id) {
     rc = device_common_main_loop(&fridge.base, fd);
 
 	// Clean up
-    device_common_cleanup(&fridge.base, fd, dummy_fd);
+    device_common_cleanup(&fridge.base, fd, keep_alive_fd);
 
     return rc;
 }

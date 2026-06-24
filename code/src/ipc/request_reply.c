@@ -52,6 +52,22 @@ int ipc_send_request_and_wait(const domo_message *request, domo_message *respons
         return ERR_TIMEOUT;
     }
 	
-	// 5: If we reach this point, select() returned a positive number.
-    return ipc_recv_message(fd_in, response);
+    int rc = ipc_recv_message(fd_in, response);
+    if (rc != OK) {
+        return rc;
+    }
+
+    if (response->request_id != request->request_id) {
+        return ERR_IPC_FAILURE;
+    }
+
+    if (response->src_id != request->target_id) {
+        return ERR_IPC_FAILURE;
+    }
+
+    if (response->kind != MSG_RESPONSE) {
+        return ERR_IPC_FAILURE;
+    }
+
+    return OK;
 }

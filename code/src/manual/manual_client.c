@@ -71,6 +71,10 @@ static int build_manual_request(device_id id,
     }
 
     memset(msg, 0, sizeof(*msg));
+    msg->kind = MSG_REQUEST;
+    msg->src_id = -1;
+    msg->src_pid = getpid();
+    msg->request_id = 0;
     snprintf(msg->sender_id, sizeof(msg->sender_id), "%s", EXT_SENDER_ID);
     msg->target_id = id;
     msg->dst_id = id;

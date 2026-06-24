@@ -162,7 +162,7 @@ int deserialize_message(char *buffer, domo_message *msg)
     strncpy(msg->payload, fields[10], sizeof(msg->payload) - 1);
     msg->payload[sizeof(msg->payload) - 1] = '\0';
 
-    msg->kind = MSG_REQUEST;
+    //msg->kind = MSG_REQUEST;
 
     return OK;
 }

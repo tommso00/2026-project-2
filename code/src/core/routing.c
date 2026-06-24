@@ -256,6 +256,10 @@ int request_reply_timeout(const char *target_fifo, const char *reply_fifo,
         close(fd_reply);
         unlink(reply_fifo);
         return rc;
+    }else{
+        if(rc==OK){
+            //response->kind = MSG_RESPONSE;
+        }
     }
 
     FD_ZERO(&read_fds);
@@ -280,11 +284,58 @@ int request_reply_timeout(const char *target_fifo, const char *reply_fifo,
         return ERR_TIMEOUT;
     }
 
+    if (!FD_ISSET(fd_reply, &read_fds)) {
+        close(fd_reply);
+        unlink(reply_fifo);
+        return ERR_IPC_FAILURE;
+    }
+
     rc = ipc_recv_message(fd_reply, response);
+    if (rc != OK) {
+        close(fd_reply);
+        unlink(reply_fifo);
+
+        if (rc == ERR_DEVICE_NOT_FOUND || rc == ERR_IPC_FAILURE) {
+            return ERR_IPC_FAILURE;
+        }
+
+        return rc;
+    }
+
+    if (response->status != OK) {
+        close(fd_reply);
+        unlink(reply_fifo);
+        return response->status;
+    }
+
+    if (response->request_id != request->request_id) {
+        close(fd_reply);
+        unlink(reply_fifo);
+        return ERR_IPC_FAILURE;
+    }
+
+    if (response->src_id != request->target_id) {
+        close(fd_reply);
+        unlink(reply_fifo);
+        return ERR_IPC_FAILURE;
+    }
+
+    if (response->dst_id != request->src_id) {
+        close(fd_reply);
+        unlink(reply_fifo);
+        return ERR_IPC_FAILURE;
+    }
+
+    if (response->status != OK) {
+        close(fd_reply);
+        unlink(reply_fifo);
+        return response->status;
+    }
 
     close(fd_reply);
     unlink(reply_fifo);
-    return rc;
+    return OK;
+
 }
 
 int request_reply(const char *target_fifo, const char *reply_fifo,

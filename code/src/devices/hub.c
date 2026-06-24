@@ -110,40 +110,47 @@ static int parse_link_parent_id(const domo_message *req,int *parent_id_out) {
 
 
 static int hub_load_children(hub_device *hub) {
-    int count=0;
+    int count = 0;
     int rc;
-    if(hub==NULL) {
+
+    if (hub == NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-    if(hub->child_count>0) {
+
+    if (hub->child_count > 0) {
         return OK;
     }
-    memset(hub->children,0,sizeof(hub->children));
-    hub->child_count=0;
-    if(hub->base.child_ids!=NULL && hub->base.child_count>0) {
-        size_t n=hub->base.child_count;
-        if(n>MAX_DEVICES) {
-            n=MAX_DEVICES;
+
+    memset(hub->children, 0, sizeof(hub->children));
+    hub->child_count = 0;
+
+    if (hub->base.child_ids != NULL && hub->base.child_count > 0) {
+        size_t n = hub->base.child_count;
+        if (n > MAX_DEVICES) {
+            n = MAX_DEVICES;
         }
-        for(size_t i=0;i<n;++i) {
-            hub->children[i]=hub->base.child_ids[i];
+        for (size_t i = 0; i < n; ++i) {
+            hub->children[i] = hub->base.child_ids[i];
         }
-        hub->child_count=(int)n;
-        hub->base.child_count=(size_t)hub->child_count;
+        hub->child_count = (int)n;
+        hub->base.child_count = (size_t)hub->child_count;
         return OK;
     }
-    rc=routing_collect_children(hub->base.info.id,
-                                hub->children,
-                                MAX_DEVICES,
-                                &count);
-    if(rc!=OK) {
+
+    rc = routing_collect_children(hub->base.info.id,
+                                  hub->children,
+                                  MAX_DEVICES,
+                                  &count);
+    if (rc != OK) {
         return rc;
     }
-    if(count<0 || count>MAX_DEVICES) {
+
+    if (count < 0 || count > MAX_DEVICES) {
         return ERR_IPC_FAILURE;
     }
-    hub->child_count=count;
-    hub->base.child_count=(size_t)hub->child_count;
+
+    hub->child_count = count;
+    hub->base.child_count = (size_t)hub->child_count;
     return OK;
 }
 
@@ -226,84 +233,129 @@ static int hub_send_command_to_child(hub_device *hub,
     char target_fifo[PATH_MAX];
     char reply_fifo[PATH_MAX];
     int rc;
-    if(hub==NULL || command==NULL || child_resp==NULL) {
+
+    if (hub == NULL || command == NULL || child_resp == NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-    memset(&req,0,sizeof(req));
-    memset(child_resp,0,sizeof(*child_resp));
-    req.kind=MSG_REQUEST;
-    snprintf(req.command,sizeof(req.command),"%s",command);
-    snprintf(req.sender_id,sizeof(req.sender_id),"%d",hub->base.info.id);
-    req.target_id=child_id;
-    req.src_id=hub->base.info.id;
-    req.dst_id=child_id;
-    req.src_pid=getpid();
-    req.request_id=hub_next_request_id(hub);
-    req.status=OK;
-    if(arg1!=NULL) {
-        snprintf(req.arg1,sizeof(req.arg1),"%s",arg1);
+
+    memset(&req, 0, sizeof(req));
+    memset(child_resp, 0, sizeof(*child_resp));
+
+    req.kind = MSG_REQUEST;
+    snprintf(req.command, sizeof(req.command), "%s", command);
+    snprintf(req.sender_id, sizeof(req.sender_id), "%d", hub->base.info.id);
+    req.target_id = child_id;
+    req.src_id = hub->base.info.id;
+    req.dst_id = child_id;
+    req.src_pid = getpid();
+    req.request_id = hub_next_request_id(hub);
+    req.status = OK;
+
+    if (arg1 != NULL) {
+        snprintf(req.arg1, sizeof(req.arg1), "%s", arg1);
     }
-    if(arg2!=NULL) {
-        snprintf(req.arg2,sizeof(req.arg2),"%s",arg2);
+    if (arg2 != NULL) {
+        snprintf(req.arg2, sizeof(req.arg2), "%s", arg2);
     }
-    if(payload!=NULL) {
-        snprintf(req.payload,sizeof(req.payload),"%s",payload);
+    if (payload != NULL) {
+        snprintf(req.payload, sizeof(req.payload), "%s", payload);
     }
-    rc=make_device_fifo_path(child_id,target_fifo,sizeof(target_fifo));
-    if(rc!=OK) {
+
+    rc = make_device_fifo_path(child_id, target_fifo, sizeof(target_fifo));
+    if (rc != OK) {
         return rc;
     }
-    rc=make_reply_fifo_path(req.src_pid,req.request_id,reply_fifo,sizeof(reply_fifo));
-    if(rc!=OK) {
+
+    rc = make_reply_fifo_path(req.src_pid, req.request_id, reply_fifo, sizeof(reply_fifo));
+    if (rc != OK) {
         return rc;
     }
-    return request_reply_timeout(target_fifo,reply_fifo,&req,child_resp,TIMEOUT_DEVICE);
+
+    rc = request_reply_timeout(target_fifo, reply_fifo, &req, child_resp, TIMEOUT_DEVICE);
+    if (rc != OK) {
+        return rc;
+    }
+
+    if (child_resp->request_id != req.request_id) {
+        return ERR_IPC_FAILURE;
+    }
+
+    if (child_resp->src_id != child_id) {
+        return ERR_IPC_FAILURE;
+    }
+
+    if (child_resp->dst_id != hub->base.info.id) {
+        return ERR_IPC_FAILURE;
+    }
+
+    if (child_resp->status != OK) {
+        return child_resp->status;
+    }
+
+    return OK;
 }
 
 
-static int hub_propagate_to_children(device *dev,const domo_message *req) {
-    hub_device *hub=(hub_device *)dev;
+static int hub_propagate_to_children(device *dev, const domo_message *req) {
+    hub_device *hub = (hub_device *)dev;
     int rc;
     int i;
     char label[32];
     char position[32];
     char payload[96];
     state expected_state;
-    if(hub==NULL || req==NULL) {
+
+    if (hub == NULL || req == NULL) {
         return ERR_INVALID_PARAMETERS;
     }
-    rc=hub_load_children(hub);
-    if(rc!=OK) {
+
+    rc = hub_load_children(hub);
+    if (rc != OK) {
         return rc;
     }
-    rc=parse_switch_args(req,label,sizeof(label),position,sizeof(position));
-    if(rc!=OK) {
+
+    if (hub->child_count <= 0) {
+        return ERR_DEVICE_NOT_FOUND;
+    }
+
+    rc = parse_switch_args(req, label, sizeof(label), position, sizeof(position));
+    if (rc != OK) {
         return rc;
     }
-    rc=expected_state_from_position(position,&expected_state);
-    if(rc!=OK) {
+
+    rc = expected_state_from_position(position, &expected_state);
+    if (rc != OK) {
         return rc;
     }
-    snprintf(payload,sizeof(payload),"sys_state,%s",position);
-    for(i=0;i<hub->child_count;++i) {
+
+    snprintf(payload, sizeof(payload), "sys_state,%s", position);
+
+    for (i = 0; i < hub->child_count; ++i) {
         domo_message child_resp;
-        rc=hub_send_command_to_child(hub,
-                                     hub->children[i],
-                                     CMD_SWITCH,
-                                     "sys_state",
-                                     position,
-                                     payload,
-                                     &child_resp);
-        if(rc!=OK) {
-            continue;
+
+        rc = hub_send_command_to_child(hub,
+                                       hub->children[i],
+                                       CMD_SWITCH,
+                                       "sys_state",
+                                       position,
+                                       payload,
+                                       &child_resp);
+        if (rc != OK) {
+            hub->manual_override = true;
+            hub->base.info.manual_override = true;
+            return rc;
         }
-        if(child_resp.status!=OK) {
+
+        if (child_resp.status != OK) {
+            hub->manual_override = true;
+            hub->base.info.manual_override = true;
             return child_resp.status;
         }
     }
-    hub->manual_override=false;
-    hub->base.info.manual_override=false;
-    hub->base.info.state=expected_state;
+
+    hub->manual_override = false;
+    hub->base.info.manual_override = false;
+    hub->base.info.state = expected_state;
     return OK;
 }
 
@@ -483,20 +535,20 @@ static int hub_handle_message(device *dev,const domo_message *req,domo_message *
             snprintf(resp->payload,sizeof(resp->payload),"invalid switch position");
             return OK;
         }
-        hub->base.info.state=expected_state;
-        hub->manual_override=false;
-        hub->base.info.manual_override=false;
-        rc=hub_propagate_to_children(dev,req);
-        if(rc!=OK) {
-            resp->status=rc;
-            snprintf(resp->payload,sizeof(resp->payload),
-                    "failed to propagate switch to children");
+        //hub->base.info.state=expected_state;
+        //hub->manual_override=false;
+        //hub->base.info.manual_override=false;
+        rc = hub_propagate_to_children(dev, req);
+        if (rc != OK) {
+            resp->status = rc;
+            snprintf(resp->payload, sizeof(resp->payload),
+                    "hub %d switch failed", dev->info.id);
             return OK;
         }
-        snprintf(resp->payload,sizeof(resp->payload),
-                "hub %d switched %s",
-                hub->base.info.id,
-                state_str(hub->base.info.state));
+
+        resp->status = OK;
+        snprintf(resp->payload, sizeof(resp->payload),
+                "hub %d switched %s", dev->info.id, position);
         return OK;
     }
     if(strcmp(req->command,CMD_STATUS)==0) {

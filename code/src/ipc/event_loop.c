@@ -22,19 +22,19 @@ static int handle_stdin_event(controller *ctrl) {
 }
 
 
-static void eventloop_print_async_line(const char *fmt,...) {
-    // va_list ap;
-    if(fmt==NULL) {
+static void eventloop_print_async_line(const char *fmt, ...)
+{
+    va_list ap;
+
+    if (fmt == NULL) {
         return;
     }
-    // Debug log - commentato per ora
-    // fprintf(stderr,"\r");
-    // va_start(ap,fmt);
-    // vfprintf(stderr,fmt,ap);
-    // va_end(ap);
-    // fprintf(stderr,"\n");
-    // fflush(stderr);
-    (void)fmt;
+
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+    printf("\n");
+    fflush(stdout);
 }
 
 
@@ -68,6 +68,9 @@ static int handle_controller_fifo_event(controller *ctrl,int fifo_fd) {
         }
         if(rc!=OK) {
             return rc;
+        }
+        if(rc==OK){
+            msg.kind = MSG_REQUEST;
         }
         handled_any=1;
         if(strcmp(msg.command,"STATUS")==0) {

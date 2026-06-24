@@ -212,6 +212,11 @@ int device_common_main_loop(device *dev, int fd)
                         break;
                     }
                     break;
+                }else{
+                    if(rc == OK){
+                        req.kind = MSG_REQUEST;
+                    }
+                    
                 }
 
                 // Debug log - commented out

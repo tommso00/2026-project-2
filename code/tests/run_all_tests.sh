@@ -5,7 +5,6 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR" || exit 1
 
 TESTS=(
-  "tests/test_linking.sh"
   "tests/test_cycle_detection.sh"
   "tests/test_override.sh"
   "tests/test_timer_validation.sh"

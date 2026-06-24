@@ -44,37 +44,43 @@ assert_not_contains() {
 
 bash scripts/cleanup_ipc.sh >/dev/null 2>&1 || true
 
-cat > "$CMD_FILE" <<'EOF'
-add hub
-add bulb
-add window
-add hub
-list
-link 2 to 1
-list
-info 2
-link 3 to 2
-list
-info 3
-link 4 to 3
-list
-info 4
-link 2 to 4
-list
-info 2
-EOF
+CTRL_IN="$OUT_DIR/${TEST_NAME}.fifo"
+rm -f "$CTRL_IN"
+mkfifo "$CTRL_IN" || fail "failed to create controller fifo"
 
 CONTROLLER_STATUS=0
+./bin/domotics_controller < "$CTRL_IN" > "$OUT_FILE" 2>&1 &
+CTRL_PID=$!
 
-# --- FIX DEFINITIVO: Leggiamo riga per riga e aspettiamo 2 secondi tra un comando e l'altro ---
-{
-    while IFS= read -r cmd; do
-        echo "$cmd"
-        sleep 2
-    done < "$CMD_FILE"
-    sleep 5
-    echo "exit"
-} | ./bin/domotics_controller > "$OUT_FILE" 2>&1 || CONTROLLER_STATUS=$?
+exec {WRITER_FD}> "$CTRL_IN" || fail "failed to open controller input fifo"
+
+
+echo "add hub" >&"$WRITER_FD"; sleep 1
+echo "add bulb" >&"$WRITER_FD"; sleep 1
+echo "add window" >&"$WRITER_FD"; sleep 1
+echo "add hub" >&"$WRITER_FD"; sleep 1
+echo "list" >&"$WRITER_FD"; sleep 1
+
+echo "link 2 to 1" >&"$WRITER_FD"; sleep 2
+echo "list" >&"$WRITER_FD"; sleep 1
+echo "info 2" >&"$WRITER_FD"; sleep 6
+
+echo "link 3 to 2" >&"$WRITER_FD"; sleep 2
+echo "list" >&"$WRITER_FD"; sleep 1
+echo "info 3" >&"$WRITER_FD"; sleep 6
+
+echo "link 4 to 3" >&"$WRITER_FD"; sleep 2
+echo "list" >&"$WRITER_FD"; sleep 1
+echo "info 4" >&"$WRITER_FD"; sleep 6
+
+echo "link 2 to 4" >&"$WRITER_FD"; sleep 3
+echo "list" >&"$WRITER_FD"; sleep 1
+echo "info 2" >&"$WRITER_FD"; sleep 8
+
+echo "exit" >&"$WRITER_FD"
+
+exec {WRITER_FD}>&-
+wait "$CTRL_PID" 2>/dev/null || true
 
 [ "$CONTROLLER_STATUS" -eq 0 ] || fail "controller exited with non-zero status: $CONTROLLER_STATUS"
 
@@ -87,10 +93,7 @@ assert_contains "Linked device 2 to 1" "valid link 2 -> 1 not reported"
 assert_contains "^2[[:space:]]+bulb[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+1$" \
     "device 2 parent was not updated to 1 after valid link"
 
-# Verifica dettaglio del device dopo il link valido.
-# Con l'output che hai mostrato, info 2 produce una riga tipo:
-# bulb id=2 state=off manual_override=false time=0
-# Se il parent NON compare ancora nel dettaglio, questo test ti evidenzia proprio il gap richiesto.
+
 assert_contains "bulb id=2 .*parent=1|bulb id=2 .* parent 1|bulb id=2 .*parent: 1" \
     "device 2 detail does not show parent 1 after valid link"
 
